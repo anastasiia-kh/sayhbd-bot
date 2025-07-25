@@ -17,7 +17,15 @@ const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(d
 const addReminderScene = new Scenes.WizardScene(
   'addReminder',
   (ctx) => {
-    ctx.reply('📅 Введіть дату народження (наприклад 12.02.1990):');
+    const datePrompts = [
+  '📅 Кидай дату народження! Наприклад: 12.02.1990 або 1 квітня 1985.',
+  '🎂 Напиши дату, тільки не «завтра» — я ж бот, не екстрасенс! 😄',
+  '🗓️ Дата народження, будь ласка! Можна як хочеш, я розберуся.',
+  '📆 Введи дату, поки не передумав вітати 😉',
+  '👶 Коли зʼявилась ця легенда на світ? Дай дату!'
+];
+const randomPrompt = datePrompts[Math.floor(Math.random() * datePrompts.length)];
+ctx.reply(randomPrompt);
     ctx.wizard.state.reminder = {};
     return ctx.wizard.next();
   },
