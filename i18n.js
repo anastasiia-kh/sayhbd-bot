@@ -39,6 +39,7 @@ const translations = {
     btnHelp: "ℹ️ Допомога",
     btnLang: "🌍 Мова"
   },
+
   en: {
     start: "Hi! I'm SayHBDbot 🎉\nAdd a reminder so you never forget to congratulate someone",
     help: `ℹ️ I help you remember important dates!
@@ -80,3 +81,4 @@ Commands:
 };
 
 module.exports = (lang = 'ua') => translations[lang] || translations.ua;
+
