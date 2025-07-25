@@ -3,18 +3,25 @@ const cron = require('node-cron');
 const fs = require('fs');
 const express = require('express');
 const { parse, format, isToday, differenceInYears } = require('date-fns');
-const { loadUserReminders, saveUserReminders } = require('./userStorage');
-
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 
-const remindersFile = '/tmp/reminders.json';
-if (!fs.existsSync(remindersFile)) {
-  fs.writeFileSync(remindersFile, '{}');
-}
-const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
-const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(data, null, 2));
+const dataDir = './userData';
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
+
+const getUserFilePath = (userId) => `${dataDir}/${userId}.json`;
+
+const loadUserReminders = (userId) => {
+  const filePath = getUserFilePath(userId);
+  if (!fs.existsSync(filePath)) return [];
+  return JSON.parse(fs.readFileSync(filePath));
+};
+
+const saveUserReminders = (userId, data) => {
+  const filePath = getUserFilePath(userId);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+};
 
 const addReminderScene = new Scenes.WizardScene(
   'addReminder',
@@ -87,10 +94,9 @@ const addReminderScene = new Scenes.WizardScene(
         return ctx.reply('⚠️ Надішли текст нотатки або натисни "Пропустити".');
       }
       const note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
-     const reminders = loadUserReminders(userId);
       const userId = ctx.from.id;
-      if (!reminders[userId]) reminders[userId] = [];
-      reminders[userId].push({ date: ctx.wizard.state.reminder.date, note });
+      const reminders = loadUserReminders(userId);
+      reminders.push({ date: ctx.wizard.state.reminder.date, note });
       saveUserReminders(userId, reminders);
       const messages = [
         '✅ Нагадування збережено!',
@@ -109,13 +115,15 @@ const addReminderScene = new Scenes.WizardScene(
   }
 );
 
-// PUSH-нотифікації
 cron.schedule('* * * * *', () => {
   const today = new Date();
   const todayStr = format(today, 'dd.MM');
-  const reminders = loadReminders();
+  const userFiles = fs.readdirSync(dataDir).filter((f) => f.endsWith('.json'));
 
-  for (const [userId, entries] of Object.entries(reminders)) {
+  for (const file of userFiles) {
+    const userId = file.replace('.json', '');
+    const entries = loadUserReminders(userId);
+
     entries.forEach((r) => {
       if (r.date.slice(0, 5) === todayStr) {
         const birthDate = new Date(r.date);
@@ -145,16 +153,27 @@ cron.schedule('* * * * *', () => {
       }
     });
   }
+});
 
-  const PORT = process.env.PORT || 3000;
+const stage = new Scenes.Stage([addReminderScene]);
+bot.use(session());
+bot.use(stage.middleware());
 
+bot.command('add', (ctx) => ctx.scene.enter('addReminder'));
+bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
+bot.start((ctx) => {
+  ctx.reply(
+    '👋 Привіт! Я нагадаю тобі про дні народження 🎉\nОбери дію:',
+    Markup.keyboard([['➕ Додати нагадування', '📋 Список нагадувань']]).resize()
+  );
+});
+
+bot.launch();
+
+const PORT = process.env.PORT || 3000;
 app.get('/', (req, res) => {
   res.send('SayHBD bot is running 🎉');
 });
-
 app.listen(PORT, () => {
   console.log(`✅ Server is listening on port ${PORT}`);
-});
-
-
 });
