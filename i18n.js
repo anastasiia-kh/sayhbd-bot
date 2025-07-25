@@ -1,5 +1,17 @@
 // 🌐 i18n.js — переклади для інтерфейсу
 
+
+function t(ctx, key) {
+  const lang = ctx?.from?.language_code === 'uk' ? 'ua' : 'en';
+  return translations[lang][key] || key;
+}
+
+module.exports = {
+  t
+};
+
+
+
 const translations = {
   ua: {
     start: "Привіт! Я SayHBDbot 🎉\nДодай нагадування і тепер ти не забудеш когось привітати",
