@@ -141,6 +141,13 @@ bot.hears('📋 Список нагадувань', (ctx) => {
   });
 });
 
+const birthdayTemplates = [
+  `🎉 Сьогодні важлива дата!\n {date} — виповнюється {age} років!\n📝 {note}`,
+  `🦄 Увага-увага! День народження на горизонті!\n {date} — {age} років!\n🧾 {note}`,
+  `🔔 Біп-боп! Святковий алерт!\n {date} — святкуємо {age} років!\n📣 {note}`,
+  `🌟 {date} — {age} років\n{note}📝`
+];
+
 cron.schedule('* * * * *', () => {
   const reminders = loadReminders();
   const today = format(new Date(), 'dd.MM');
@@ -151,7 +158,11 @@ cron.schedule('* * * * *', () => {
       const reminderDate = format(parsed, 'dd.MM');
       if (reminderDate === today) {
         const age = differenceInYears(new Date(), parsed);
-        const text = `🎈 Сьогодні у когось день народження!\n${reminder.date} — виповнюється ${age}!\n${reminder.note ? '📝 ' + reminder.note : ''}`;
+        const template = birthdayTemplates[Math.floor(Math.random() * birthdayTemplates.length)];
+        const text = template
+          .replace('{date}', reminder.date)
+          .replace('{age}', age)
+          .replace('{note}', reminder.note || '');
         bot.telegram.sendMessage(userId, text);
       }
     });
