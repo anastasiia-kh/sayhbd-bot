@@ -1,6 +1,7 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const cron = require('node-cron');
 const fs = require('fs');
+const express = require('express');
 const { parse, format, isToday } = require('date-fns');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -13,6 +14,7 @@ if (!fs.existsSync(remindersFile)) {
 
 const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
 const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(data, null, 2));
+
 
 const addReminderScene = new Scenes.WizardScene(
   'addReminder',
@@ -220,12 +222,15 @@ cron.schedule('*/2 * * * *', () => {
   checkReminders();
 });
 
-(async () => {
-  try {
-    await bot.launch();
-    console.log('✅ Бот успішно запущено');
-  } catch (err) {
-    console.error('❌ Бот не запущено. Можливо, вже працює інша копія:', err.message);
-    process.exit(1); // Примусове завершення, якщо бот вже працює
-  }
-})();
+// Express Webhook
+const app = express();
+app.use(express.json());
+app.use(bot.webhookCallback('/webhook'));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Сервер слухає порт ${PORT}`);
+});
+
+// Установка webhook при запуску
+bot.telegram.setWebhook(`https://${process.env.RENDER_EXTERNAL_URL}/webhook`);
