@@ -98,7 +98,6 @@ bot.hears('📋 Список нагадувань', (ctx) => {
     ]));
   });
 });
-});
 
 bot.action(/delete_(\d+)/, (ctx) => {
   const idx = Number(ctx.match[1]);
