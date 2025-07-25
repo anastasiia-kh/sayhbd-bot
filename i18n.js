@@ -23,7 +23,15 @@ const translations = {
     today_prefix: '🎂 Today:',
     today: '!',
     today_age: (age) => ` — turning ${age}!`,
-    turning_age: (age) => ` — turning ${age}!`
+    turning_age: (age) => ` — turning ${age}!`,
+    buttons: {
+      change_language: '🌐 Change language',
+      help: '❓ Help',
+      list: '📋 List',
+      add: '➕ Add',
+      upcoming: '⏭️ Next 5'
+    },
+    menu: ['➕ Add', '📋 List', '⏭️ Next 5', '❓ Help', '🌐 Change language']
   },
   uk: {
     start: 'Привіт! Я можу нагадувати про дні народження. Натисни /add щоб створити нагадування.',
@@ -47,7 +55,15 @@ const translations = {
     today_prefix: '🎂 Сьогодні:',
     today: '!',
     today_age: (age) => ` — виповнюється ${age}!`,
-    turning_age: (age) => ` — виповнюється ${age}!`
+    turning_age: (age) => ` — виповнюється ${age}!`,
+    buttons: {
+      change_language: '🌐 Змінити мову',
+      help: '❓ Допомога',
+      list: '📋 Список',
+      add: '➕ Додати',
+      upcoming: '⏭️ Наступні 5'
+    },
+    menu: ['➕ Додати', '📋 Список', '⏭️ Наступні 5', '❓ Допомога', '🌐 Змінити мову']
   }
 };
 
