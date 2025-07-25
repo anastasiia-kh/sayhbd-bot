@@ -85,6 +85,21 @@ bot.command('list', (ctx) => {
   });
 });
 
+bot.hears('📋 Список нагадувань', (ctx) => {
+  const allReminders = loadReminders();
+  const reminders = allReminders[ctx.from.id] || [];
+  if (!reminders.length) return ctx.reply('📭 Немає збережених нагадувань.');
+
+  reminders.forEach((r, i) => {
+    const text = `${i + 1}. ${r.date}${r.note ? ' — ' + r.note : ''}`;
+    ctx.reply(text, Markup.inlineKeyboard([
+      Markup.button.callback('✏️ Редагувати', `edit_${i}`),
+      Markup.button.callback('🗑 Видалити', `delete_${i}`)
+    ]));
+  });
+});
+});
+
 bot.action(/delete_(\d+)/, (ctx) => {
   const idx = Number(ctx.match[1]);
   const reminders = loadReminders();
