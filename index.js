@@ -1,16 +1,14 @@
 // 📁 index.js — Telegram Bot logic
 
-const { Telegraf, Markup } = require('telegraf');
-const session = require('telegraf/session');
-bot.use(session());
-const fs = require('fs');
+const { Markup, session } = require('telegraf');
+const fs = require('fs/promises');
 const { t, getLang } = require('./i18n');
-const { loadReminders, saveReminder, deleteReminder, updateNote, getUserReminderCount } = require('./storage');
+const { loadReminders, saveReminder } = require('./storage');
 const { checkSubscription, isAdmin } = require('./subscription');
 const { handlePayment } = require('./billing');
+const bot = require('./botInstance');
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const bot = new Telegraf(BOT_TOKEN);
+bot.use(session());
 
 function sendMainMenu(ctx) {
   return ctx.reply(t(ctx, 'start'), Markup.keyboard([
@@ -29,16 +27,21 @@ function normalizeDateInput(input) {
 }
 
 bot.start(async (ctx) => {
+  ctx.session = null;
   await sendMainMenu(ctx);
 });
 
 bot.command('help', async (ctx) => {
+  if (ctx.session?.lastCommand === 'help') return;
+  ctx.session = { lastCommand: 'help' };
   await ctx.reply(t(ctx, 'help'));
   await sendMainMenu(ctx);
 });
 
 bot.command('list', async (ctx) => {
-  const reminders = loadReminders(ctx.from.id);
+  if (ctx.session?.lastCommand === 'list') return;
+  ctx.session = { lastCommand: 'list' };
+  const reminders = await loadReminders(ctx.from.id);
   if (reminders.length === 0) return ctx.reply(t(ctx, 'no_reminders'));
   let message = reminders.map((r, i) => `${i + 1}. ${r.date} — ${r.note}`).join('\n');
   await ctx.reply(message);
@@ -46,13 +49,13 @@ bot.command('list', async (ctx) => {
 });
 
 bot.command('add', async (ctx) => {
-  ctx.session = ctx.session || {};
-  ctx.session.step = 'awaiting_date';
+  ctx.session = { step: 'awaiting_date' };
   await ctx.reply(t(ctx, 'enter_date'));
   await sendMainMenu(ctx);
 });
 
 bot.command('menu', async (ctx) => {
+  ctx.session = null;
   await sendMainMenu(ctx);
 });
 
@@ -81,14 +84,14 @@ bot.on('text', async (ctx) => {
   if (step === 'awaiting_note') {
     const noteInput = ctx.message.text.trim();
     const note = (noteInput === t(ctx, 'buttons.skip')) ? '' : noteInput;
-    const reminders = loadReminders(ctx.from.id);
+    const reminders = await loadReminders(ctx.from.id);
     if (!isAdmin(ctx.from.id) && reminders.length >= 3 && !checkSubscription(ctx.from.id).status) {
-      ctx.session = {};
+      ctx.session = null;
       return ctx.reply(t(ctx, 'limit_exceeded'));
     }
     reminders.push({ date: ctx.session.date, note });
-    saveReminder(ctx.from.id, reminders);
-    ctx.session = {};
+    await saveReminder(ctx.from.id, reminders);
+    ctx.session = null;
     await ctx.reply(t(ctx, 'reminder_added'));
     return sendMainMenu(ctx);
   }
@@ -98,15 +101,15 @@ bot.on('text', async (ctx) => {
   if (ctx.session.lastCommand === txt) return;
   ctx.session.lastCommand = txt;
 
-  if ([t(ctx, 'help'), '/help'].includes(txt)) return bot.handleUpdate({ message: { text: '/help', from: ctx.from } });
-  if ([t(ctx, 'add'), '/add'].includes(txt)) return bot.handleUpdate({ message: { text: '/add', from: ctx.from } });
-  if ([t(ctx, 'list'), '/list'].includes(txt)) return bot.handleUpdate({ message: { text: '/list', from: ctx.from } });
-  if ([t(ctx, 'upcoming')].includes(txt)) {
-    const reminders = loadReminders(ctx.from.id);
+  if ([t(ctx, 'buttons.help'), '/help'].includes(txt)) return bot.handleUpdate({ message: { text: '/help', from: ctx.from } });
+  if ([t(ctx, 'buttons.add'), '/add'].includes(txt)) return bot.handleUpdate({ message: { text: '/add', from: ctx.from } });
+  if ([t(ctx, 'buttons.list'), '/list'].includes(txt)) return bot.handleUpdate({ message: { text: '/list', from: ctx.from } });
+  if ([t(ctx, 'buttons.upcoming')].includes(txt)) {
+    const reminders = await loadReminders(ctx.from.id);
     const next5 = reminders.slice(0, 5).map((r, i) => `${i + 1}. ${r.date} — ${r.note}`).join('\n') || t(ctx, 'no_reminders');
     return ctx.reply(next5);
   }
-  if ([t(ctx, 'language')].includes(txt)) {
+  if ([t(ctx, 'buttons.change_language')].includes(txt)) {
     const newLang = getLang(ctx) === 'uk' ? 'en' : 'uk';
     ctx.from.language_code = newLang;
     return sendMainMenu(ctx);

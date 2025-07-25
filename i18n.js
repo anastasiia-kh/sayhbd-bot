@@ -1,123 +1,82 @@
-// 📁 index.js — Telegram Bot logic
+// 🌐 i18n.js — переклади для інтерфейсу
 
-const { Telegraf, Markup, session } = require('telegraf');
-const fs = require('fs/promises');
-const { t, getLang } = require('./i18n');
-const { loadReminders, saveReminder, deleteReminder, updateNote, getUserReminderCount } = require('./storage');
-const { checkSubscription, isAdmin } = require('./subscription');
-const { handlePayment } = require('./billing');
+const translations = {
+  ua: {
+    start: "Привіт! Я SayHBDbot 🎉\nДодай нагадування і тепер ти не забудеш когось привітати",
+    help: `ℹ️ Я допомагаю не забути про важливі дати!
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const bot = new Telegraf(BOT_TOKEN);
-bot.use(session());
+Команди:
+• /add — додати нове нагадування
+• /list — переглянути всі нагадування
+• /next — показати 5 найближчих подій
+• /lang — змінити мову
+• /buy — оформити підписку
+• /cancel — скасувати підписку`,
+    enterName: "Введи ім'я або опис (можна з емодзі):",
+    enterDate: "Введи дату у форматі дд.мм.рр або дд.мм.рррр (можна . / -):",
+    enterNote: "Додай нотатку або натисни \"Пропустити\":",
+    invalidDate: "❌ Невірний формат дати. Спробуй ще раз:",
+    saved: "✅ Збережено!",
+    noReminders: "ℹ️ Немає нагадувань",
+    allReminders: "📋 Усі нагадування:",
+    upcoming: "⏳ Наступні події:",
+    reminderFormat: (r) => `📌 ${r.name} — ${r.date}${r.note ? `\n📝 ${r.note}` : ''}`,
+    limitReached: "⚠️ Доступно лише 3 безкоштовних нагадування. Оформи підписку, щоб додати більше.",
+    buy: "💳 Оформити підписку",
+    skip: "Пропустити",
+    langUpdated: "🇺🇦 Мову змінено на українську",
+    subscriptionSuccess: "✅ Підписку оформлено! Дякую за підтримку 💙",
+    subscriptionCancelled: "❌ Підписку скасовано",
+    subscriptionReminder: "🔔 Нагадування: твоя підписка закінчується скоро. Оформи знову, щоб не втратити доступ.",
+    alreadySubscribed: "У тебе вже активна підписка 💎",
+    buyOptions: "Оберіть варіант підписки:",
+    btnMonth: "1 міс (≈35 грн)",
+    btnYear: "1 рік (≈380 грн)",
+    mainMenu: "📋 Головне меню",
+    btnAdd: "➕ Додати",
+    btnList: "📄 Список",
+    btnNext: "⏭ Наступні 5",
+    btnHelp: "ℹ️ Допомога",
+    btnLang: "🌍 Мова"
+  },
+  en: {
+    start: "Hi! I'm SayHBDbot 🎉\nAdd a reminder so you never forget to congratulate someone",
+    help: `ℹ️ I help you remember important dates!
 
-function sendMainMenu(ctx) {
-  return ctx.reply(t(ctx, 'start'), Markup.keyboard([
-    [t(ctx, 'buttons.add'), t(ctx, 'buttons.list')],
-    [t(ctx, 'buttons.upcoming')],
-    [t(ctx, 'buttons.change_language'), t(ctx, 'buttons.help')]
-  ]).resize());
-}
-
-function normalizeDateInput(input) {
-  const match = input.match(/^\d{2}[.\/-]\d{2}[.\/-](\d{2}|\d{4})$/);
-  if (!match) return null;
-  let [day, month, year] = input.split(/[.\/-]/);
-  if (year.length === 2) year = `19${year}`;
-  return `${day}-${month}-${year}`;
-}
-
-bot.start(async (ctx) => {
-  ctx.session = null;
-  await sendMainMenu(ctx);
-});
-
-bot.command('help', async (ctx) => {
-  if (ctx.session?.lastCommand === 'help') return;
-  ctx.session = { lastCommand: 'help' };
-  await ctx.reply(t(ctx, 'help'));
-  await sendMainMenu(ctx);
-});
-
-bot.command('list', async (ctx) => {
-  if (ctx.session?.lastCommand === 'list') return;
-  ctx.session = { lastCommand: 'list' };
-  const reminders = await loadReminders(ctx.from.id);
-  if (reminders.length === 0) return ctx.reply(t(ctx, 'no_reminders'));
-  let message = reminders.map((r, i) => `${i + 1}. ${r.date} — ${r.note}`).join('\n');
-  await ctx.reply(message);
-  await sendMainMenu(ctx);
-});
-
-bot.command('add', async (ctx) => {
-  ctx.session = { step: 'awaiting_date' };
-  await ctx.reply(t(ctx, 'enter_date'));
-  await sendMainMenu(ctx);
-});
-
-bot.command('menu', async (ctx) => {
-  ctx.session = null;
-  await sendMainMenu(ctx);
-});
-
-bot.command('status', async (ctx) => {
-  const { status, expiry } = checkSubscription(ctx.from.id);
-  if (isAdmin(ctx.from.id)) return ctx.reply(t(ctx, 'admin_access'));
-  if (!status) return ctx.reply(t(ctx, 'subscription_expired'));
-  await ctx.reply(t(ctx, 'subscription_active', expiry));
-  await sendMainMenu(ctx);
-});
-
-bot.on('text', async (ctx) => {
-  ctx.session = ctx.session || {};
-  const step = ctx.session.step;
-
-  if (step === 'awaiting_date') {
-    const raw = ctx.message.text.trim();
-    const normalized = normalizeDateInput(raw);
-    if (!normalized) return ctx.reply(t(ctx, 'invalid_date'));
-    ctx.session.date = normalized;
-    ctx.session.step = 'awaiting_note';
-    return ctx.reply(t(ctx, 'enter_note') + `\n(${t(ctx, 'optional')})`,
-      Markup.keyboard([[t(ctx, 'buttons.skip')]]).resize().oneTime());
+Commands:
+• /add — add a new reminder
+• /list — see all reminders
+• /next — upcoming 5 events
+• /lang — change language
+• /buy — get subscription
+• /cancel — cancel subscription`,
+    enterName: "Enter name or description (emoji allowed):",
+    enterDate: "Enter the date (dd.mm.yy or dd.mm.yyyy — also supports . / -):",
+    enterNote: "Add a note or press \"Skip\":",
+    invalidDate: "❌ Invalid date format. Try again:",
+    saved: "✅ Saved!",
+    noReminders: "ℹ️ No reminders",
+    allReminders: "📋 All reminders:",
+    upcoming: "⏳ Upcoming events:",
+    reminderFormat: (r) => `📌 ${r.name} — ${r.date}${r.note ? `\n📝 ${r.note}` : ''}`,
+    limitReached: "⚠️ Only 3 free reminders allowed. Get a subscription to add more.",
+    buy: "💳 Get subscription",
+    skip: "Skip",
+    langUpdated: "🇬🇧 Language switched to English",
+    subscriptionSuccess: "✅ Subscription activated! Thanks for your support 💙",
+    subscriptionCancelled: "❌ Subscription cancelled",
+    subscriptionReminder: "🔔 Reminder: your subscription is ending soon. Renew to keep access.",
+    alreadySubscribed: "You already have an active subscription 💎",
+    buyOptions: "Choose a subscription plan:",
+    btnMonth: "1 mo (~$0.99)",
+    btnYear: "1 yr (~$9.99)",
+    mainMenu: "📋 Main menu",
+    btnAdd: "➕ Add",
+    btnList: "📄 List",
+    btnNext: "⏭ Next 5",
+    btnHelp: "ℹ️ Help",
+    btnLang: "🌍 Language"
   }
+};
 
-  if (step === 'awaiting_note') {
-    const noteInput = ctx.message.text.trim();
-    const note = (noteInput === t(ctx, 'buttons.skip')) ? '' : noteInput;
-    const reminders = await loadReminders(ctx.from.id);
-    if (!isAdmin(ctx.from.id) && reminders.length >= 3 && !checkSubscription(ctx.from.id).status) {
-      ctx.session = null;
-      return ctx.reply(t(ctx, 'limit_exceeded'));
-    }
-    reminders.push({ date: ctx.session.date, note });
-    await saveReminder(ctx.from.id, reminders);
-    ctx.session = null;
-    await ctx.reply(t(ctx, 'reminder_added'));
-    return sendMainMenu(ctx);
-  }
-
-  const txt = ctx.message.text;
-  ctx.session.lastCommand = ctx.session.lastCommand || '';
-  if (ctx.session.lastCommand === txt) return;
-  ctx.session.lastCommand = txt;
-
-  if ([t(ctx, 'buttons.help'), '/help'].includes(txt)) return bot.handleUpdate({ message: { text: '/help', from: ctx.from } });
-  if ([t(ctx, 'buttons.add'), '/add'].includes(txt)) return bot.handleUpdate({ message: { text: '/add', from: ctx.from } });
-  if ([t(ctx, 'buttons.list'), '/list'].includes(txt)) return bot.handleUpdate({ message: { text: '/list', from: ctx.from } });
-  if ([t(ctx, 'buttons.upcoming')].includes(txt)) {
-    const reminders = await loadReminders(ctx.from.id);
-    const next5 = reminders.slice(0, 5).map((r, i) => `${i + 1}. ${r.date} — ${r.note}`).join('\n') || t(ctx, 'no_reminders');
-    return ctx.reply(next5);
-  }
-  if ([t(ctx, 'buttons.change_language')].includes(txt)) {
-    const newLang = getLang(ctx) === 'uk' ? 'en' : 'uk';
-    ctx.from.language_code = newLang;
-    return sendMainMenu(ctx);
-  }
-});
-
-bot.launch();
-
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+module.exports = (lang = 'ua') => translations[lang] || translations.ua;

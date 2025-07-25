@@ -1,28 +1,36 @@
-// 📁 subscription.js
+// 📁 storage.js — збереження нагадувань
 
 const fs = require('fs');
 const path = require('path');
 
 const dataDir = path.join(__dirname, 'data');
 
-function getPaidUntil(userId) {
-  const file = path.join(dataDir, `${userId}.json`);
-  if (!fs.existsSync(file)) return null;
-  const data = JSON.parse(fs.readFileSync(file));
-  if (!data.paidUntil) return null;
-  return new Date(data.paidUntil);
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir);
 }
 
-function setPaidUntil(userId, date) {
-  const file = path.join(dataDir, `${userId}.json`);
-  const current = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : {};
-  current.paidUntil = date.toISOString();
-  fs.writeFileSync(file, JSON.stringify(current, null, 2));
+function getFilePath(userId) {
+  return path.join(dataDir, `${userId}.json`);
 }
 
-function hasPaid(userId) {
-  const until = getPaidUntil(userId);
-  return until && until > new Date();
+function loadReminders(userId) {
+  const file = getFilePath(userId);
+  if (!fs.existsSync(file)) return [];
+  const raw = fs.readFileSync(file);
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('❌ JSON parse error:', err);
+    return [];
+  }
 }
 
-module.exports = { getPaidUntil, setPaidUntil, hasPaid };
+function saveReminder(userId, reminders) {
+  const file = getFilePath(userId);
+  fs.writeFileSync(file, JSON.stringify(reminders, null, 2));
+}
+
+module.exports = {
+  loadReminders,
+  saveReminder
+};
