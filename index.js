@@ -5,10 +5,7 @@ const { parse, format, isToday } = require('date-fns');
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const remindersFile = './reminders.json';
 
-if (!fs.existsSync('/data')) {
-  fs.mkdirSync('/data', { recursive: true });
-}
-
+// Автоматичне створення reminders.json, якщо його не існує
 if (!fs.existsSync(remindersFile)) {
   fs.writeFileSync(remindersFile, '{}');
 }
@@ -88,7 +85,7 @@ bot.on('text', (ctx) => {
       reminders[userId][ctx.session.editIdx].date = ctx.message.text;
       ctx.session.editStep = 'note';
       saveReminders(reminders);
-      ctx.reply('Тепер введіть нотатку або натисніть "Пропустити"');
+      ctx.reply('Тепер введіть нотатку або напишіть "Пропустити"');
     } else if (ctx.session.editStep === 'note') {
       reminders[userId][ctx.session.editIdx].note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
       saveReminders(reminders);
