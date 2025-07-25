@@ -1,7 +1,6 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const cron = require('node-cron');
 const fs = require('fs');
-const express = require('express');
 const { parse, format, isToday, differenceInYears } = require('date-fns');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -142,10 +141,10 @@ bot.hears('📋 Список нагадувань', (ctx) => {
 });
 
 const birthdayTemplates = [
-  `🎉 Сьогодні важлива дата!\n {date} — виповнюється {age} років!\n📝 {note}`,
-  `🦄 Увага-увага! День народження на горизонті!\n {date} — {age} років!\n🧾 {note}`,
-  `🔔 Біп-боп! Святковий алерт!\n {date} — святкуємо {age} років!\n📣 {note}`,
-  `🌟 {date} — {age} років\n{note}📝`
+  `🎉 Сьогодні важлива дата!\n📅 {date} — виповнюється {age} років!\n{note}`,
+  `🦄 Увага-увага! День народження на горизонті!\n🎂 {date} — {age} років!\n{note}`,
+  `🔔 Біп-боп! Святковий алерт!\n🗓 {date} — святкуємо {age} років!\n{note}`,
+  `🌟 {date} — {age} років\n{note}`
 ];
 
 cron.schedule('* * * * *', () => {
@@ -169,13 +168,4 @@ cron.schedule('* * * * *', () => {
   });
 });
 
-const app = express();
-app.use(express.json());
-app.use(bot.webhookCallback('/webhook'));
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Сервер слухає порт ${PORT}`);
-});
-
-bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/webhook`);
+bot.launch();
