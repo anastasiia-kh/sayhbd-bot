@@ -72,7 +72,8 @@ bot.start((ctx) => {
 });
 
 bot.command('list', (ctx) => {
-  const reminders = loadReminders()[ctx.from.id] || [];
+  const allReminders = loadReminders();
+  const reminders = allReminders[ctx.from.id] || [];
   if (!reminders.length) return ctx.reply('📭 Немає збережених нагадувань.');
 
   reminders.forEach((r, i) => {
@@ -180,7 +181,7 @@ const checkReminders = () => {
 };
 
 cron.schedule('*/2 * * * *', () => {
-  console.log('⏰ Перевірка нагадувань о 09:00');
+  console.log('⏰ Перевірка нагадувань (кожні 2 хв)');
   checkReminders();
 });
 
