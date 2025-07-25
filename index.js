@@ -30,12 +30,18 @@ ctx.reply(randomPrompt);
     return ctx.wizard.next();
   },
   (ctx) => {
-    ctx.wizard.state.reminder.date = ctx.message.text;
+    if (!ctx.message || !ctx.message.text) {
+  return ctx.reply('⚠️ Будь ласка, введи дату у вигляді тексту.');
+}
+ctx.wizard.state.reminder.date = ctx.message.text;
     ctx.reply('📝 Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
     return ctx.wizard.next();
   },
   (ctx) => {
-    const note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
+    if (!ctx.message || !ctx.message.text) {
+  return ctx.reply('⚠️ Надішли текст нотатки або натисни "Пропустити".');
+}
+const note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
     const reminders = loadReminders();
     const userId = ctx.from.id;
     if (!reminders[userId]) reminders[userId] = [];
