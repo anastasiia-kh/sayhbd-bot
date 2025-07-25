@@ -61,15 +61,13 @@ const addReminderScene = new Scenes.WizardScene(
         return ctx.reply('⚠️ Не вдалося розпізнати дату. Спробуй у форматі: 12.02.1990, 2/12/95 або 02 грудня 1995.');
       }
 
-      // Нормалізація коротких років
       if (parsedDate.getFullYear() < 100) {
         const year = parsedDate.getFullYear();
-        const now = new Date();
-        const y2000 = new Date(now);
-        y2000.setFullYear(2000 + year);
-        const y1900 = new Date(now);
-        y1900.setFullYear(1900 + year);
-        parsedDate = Math.abs(now - y2000) < Math.abs(now - y1900) ? y2000 : y1900;
+        const currentYear = new Date().getFullYear();
+        const yearCandidate = 2000 + year;
+        parsedDate.setFullYear(
+          yearCandidate <= currentYear ? yearCandidate : 1900 + year
+        );
       }
 
       const normalized = format(parsedDate, 'dd.MM.yyyy');
@@ -100,7 +98,7 @@ const addReminderScene = new Scenes.WizardScene(
         '🎯 Є контакт! Я нагадаю обовʼязково.'
       ];
       const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-      ctx.reply(randomMsg, Markup.removeKeyboard());
+      ctx.reply(randomMsg, Markup.keyboard([['📋 Список нагадувань', '➕ Додати нагадування']]).resize());
       return ctx.scene.leave();
     } catch (err) {
       console.error('❌ Помилка на кроці 3 (збереження):', err);
@@ -109,86 +107,40 @@ const addReminderScene = new Scenes.WizardScene(
   }
 );
 
-const stage = new Scenes.Stage([addReminderScene]);
-bot.use(session());
-bot.use(stage.middleware());
-
-bot.start((ctx) => {
-  const name = ctx.from.first_name || 'друже';
-  ctx.reply(
-    `👋 Привіт, ${name}!
-Я той самий бот, якого не вистачало в твоєму житті, коли ти писав «З Днем народження» на два дні пізніше... 😏🎂\nДодай нагадування — і більше жодних фейлів!`,
-    Markup.keyboard([['📋 Список нагадувань', '➕ Додати нагадування']]).resize()
-  );
-});
-
-bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
-
-bot.hears('📋 Список нагадувань', (ctx) => {
-  const userId = ctx.from.id;
-  const reminders = loadReminders();
-  const userReminders = reminders[userId] || [];
-  if (userReminders.length === 0) {
-    return ctx.reply('📭 У тебе поки немає жодного нагадування.');
-  }
-  userReminders.forEach((reminder, index) => {
-    const age = reminder.date.match(/\d{4}/)
-      ? ` — виповнюється ${differenceInYears(new Date(), parse(reminder.date, 'dd.MM.yyyy', new Date()))}`
-      : '';
-    const caption = `🎉 ${reminder.date}${age}${reminder.note ? `\n📝 ${reminder.note}` : ''}`;
-    ctx.reply(caption, Markup.inlineKeyboard([
-      [
-        Markup.button.callback('✏️ Редагувати', `edit_${index}`),
-        Markup.button.callback('🗑️ Видалити', `delete_${index}`)
-      ]
-    ]));
-  });
-});
-
-const birthdayTemplates = [
-  `🎉 Сьогодні важлива дата!\n📅 {date} — виповнюється {age} років!\n{note}`,
-  `🦄 Увага-увага! День народження на горизонті!\n🎂 {date} — {age} років!\n{note}`,
-  `🔔 Біп-боп! Святковий алерт!\n🗓 {date} — святкуємо {age} років!\n{note}`,
-  `🎈 Йо-хо-хо! Хтось сьогодні святкує!\n📆 {date} — {age} років на планеті!\n{note}`,
-  `👑 Королівське свято!\n📅 {date} — {age} років мудрості й чарівності!\n{note}`,
-  `🚀 Запускаємо феєрверки! Бо сьогодні особливий день!\n🗓 {date} — {age} років святкування!\n{note}`,
-  `🕺 Танці, шампанське і торт!\n📅 {date} — {age} років магії!\n{note}`,
-  `🌈 День, коли народилась легенда!\n📅 {date} — {age} років!\n{note}`,
-  `📣 Алло, всім увага!\n{date} — день народження!\n🎁 {age} років — круто ж як!\n{note}`
-];
-
+// PUSH-нотифікації
 cron.schedule('* * * * *', () => {
+  const today = new Date();
+  const todayStr = format(today, 'dd.MM');
   const reminders = loadReminders();
-  const today = format(new Date(), 'dd.MM');
-  Object.entries(reminders).forEach(([userId, userReminders]) => {
-    userReminders.forEach((reminder) => {
-      const parsed = parse(reminder.date, 'dd.MM.yyyy', new Date());
-      const reminderDate = format(parsed, 'dd.MM');
-      if (reminderDate === today) {
-        const age = differenceInYears(new Date(), parsed);
-        const template = birthdayTemplates[Math.floor(Math.random() * birthdayTemplates.length)];
-        const text = template
-          .replace('{date}', reminder.date)
+
+  for (const [userId, entries] of Object.entries(reminders)) {
+    entries.forEach((r) => {
+      if (r.date.slice(0, 5) === todayStr) {
+        const birthDate = new Date(r.date);
+        const age = Math.max(0, differenceInYears(today, birthDate));
+        const note = r.note || '';
+        const shortDate = format(birthDate, 'dd.MM');
+
+        const templates = [
+          `🎉 Сьогодні важлива дата!\n📅 {date} — виповнюється {age} років!\n{note}`,
+          `🦄 Увага-увага! День народження на горизонті!\n🎂 {date} — {age} років!\n{note}`,
+          `🔔 Біп-боп! Святковий алерт!\n🗓 {date} — святкуємо {age} років!\n{note}`,
+          `🎈 Йо-хо-хо! Хтось сьогодні святкує!\n📆 {date} — {age} років на планеті!\n{note}`,
+          `👑 Королівське свято!\n📅 {date} — {age} років мудрості й чарівності!\n{note}`,
+          `🚀 Запускаємо феєрверки! Бо сьогодні особливий день!\n🗓 {date} — {age} років святкування!\n{note}`,
+          `🕺 Танці, шампанське і торт!\n📅 {date} — {age} років магії!\n{note}`,
+          `🌈 День, коли народилась легенда!\n📅 {date} — {age} років!\n{note}`,
+          `📣 Алло, всім увага!\n{date} — день народження!\n🎁 {age} років — круто ж як!\n{note}`
+        ];
+
+        const template = templates[Math.floor(Math.random() * templates.length)];
+        const message = template
+          .replace('{date}', shortDate)
           .replace('{age}', age)
-          .replace('{note}', reminder.note || '');
-        bot.telegram.sendMessage(userId, text, {
-          reply_markup: {
-            keyboard: [['📋 Список нагадувань']],
-            resize_keyboard: true
-          }
-        });
+          .replace('{note}', note);
+
+        bot.telegram.sendMessage(userId, message);
       }
     });
-  });
+  }
 });
-
-app.use(express.json());
-app.use(bot.webhookCallback('/webhook'));
-app.get('/', (req, res) => res.send('OK'));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Сервер слухає порт ${PORT}`);
-});
-if (process.env.RENDER_EXTERNAL_URL) {
-  bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/webhook`);
-}
