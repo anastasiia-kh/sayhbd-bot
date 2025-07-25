@@ -3,8 +3,6 @@ const cron = require('node-cron');
 const fs = require('fs');
 const express = require('express');
 const { parse, format, isToday, differenceInYears } = require('date-fns');
-const { uk } = require('date-fns/locale');
-
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const remindersFile = '/tmp/reminders.json';
@@ -41,9 +39,7 @@ const addReminderScene = new Scenes.WizardScene(
       if (!ctx.message || !ctx.message.text) {
         return ctx.reply('⚠️ Будь ласка, введи дату у вигляді тексту.');
       }
-      let userInput = ctx.message.text.trim();
-        userInput = userInput.replace(/(\d)([а-яА-Я])/g, '$1 $2');
-
+      const userInput = ctx.message.text.trim();
 
       const dateVariants = [
         'dd.MM.yyyy', 'd.MM.yyyy', 'dd.M.yyyy', 'd.M.yyyy',
@@ -59,7 +55,7 @@ const addReminderScene = new Scenes.WizardScene(
       let parsedDate;
       for (const formatStr of dateVariants) {
         try {
-          parsedDate = parse(userInput, formatStr, new Date(), { locale: uk });
+          parsedDate = parse(userInput, formatStr, new Date());
           if (!isNaN(parsedDate)) break;
         } catch {}
       }
@@ -155,9 +151,7 @@ cron.schedule('* * * * *', () => {
       const reminderDate = format(parsed, 'dd.MM');
       if (reminderDate === today) {
         const age = differenceInYears(new Date(), parsed);
-        const text = `🎈 Сьогодні у когось день народження!
-📅 ${reminder.date} — виповнюється ${age}!
-${reminder.note ? '📝 ' + reminder.note : ''}`;
+        const text = `🎈 Сьогодні у когось день народження!\n${reminder.date} — виповнюється ${age}!\n${reminder.note ? '📝 ' + reminder.note : ''}`;
         bot.telegram.sendMessage(userId, text);
       }
     });
@@ -172,6 +166,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Сервер слухає порт ${PORT}`);
 });
-
 
 bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/webhook`);
