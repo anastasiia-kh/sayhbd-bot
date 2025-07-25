@@ -1,15 +1,16 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const cron = require('node-cron');
 const fs = require('fs');
+const express = require('express');
 const { parse, format, isToday, differenceInYears } = require('date-fns');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const remindersFile = '/tmp/reminders.json';
+const app = express();
 
+const remindersFile = '/tmp/reminders.json';
 if (!fs.existsSync(remindersFile)) {
   fs.writeFileSync(remindersFile, '{}');
 }
-
 const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
 const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(data, null, 2));
 
@@ -39,7 +40,6 @@ const addReminderScene = new Scenes.WizardScene(
         return ctx.reply('⚠️ Будь ласка, введи дату у вигляді тексту.');
       }
       const userInput = ctx.message.text.trim();
-
       const dateVariants = [
         'dd.MM.yyyy', 'd.MM.yyyy', 'dd.M.yyyy', 'd.M.yyyy',
         'dd-MM-yyyy', 'd-MM-yyyy', 'dd-M-yyyy', 'd-M-yyyy',
@@ -50,7 +50,6 @@ const addReminderScene = new Scenes.WizardScene(
         "dd MMMM yyyy", "dd MMMM yy", "d MMMM yyyy", "d MMMM yy",
         "ddMMMM yyyy", "ddMMMMyy", "dMMMM yyyy", "dMMMMyy"
       ];
-
       let parsedDate;
       for (const formatStr of dateVariants) {
         try {
@@ -58,11 +57,9 @@ const addReminderScene = new Scenes.WizardScene(
           if (!isNaN(parsedDate)) break;
         } catch {}
       }
-
       if (!parsedDate || isNaN(parsedDate)) {
         return ctx.reply('⚠️ Не вдалося розпізнати дату. Спробуй у форматі: 12.02.1990, 2/12/95 або 02 грудня 1995.');
       }
-
       const normalized = format(parsedDate, 'dd.MM.yyyy');
       ctx.wizard.state.reminder.date = normalized;
       ctx.reply('📝 Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
@@ -81,10 +78,8 @@ const addReminderScene = new Scenes.WizardScene(
       const reminders = loadReminders();
       const userId = ctx.from.id;
       if (!reminders[userId]) reminders[userId] = [];
-
       reminders[userId].push({ date: ctx.wizard.state.reminder.date, note });
       saveReminders(reminders);
-
       const messages = [
         '✅ Нагадування збережено!',
         '📅 Записав! Тепер не забудеш.',
@@ -121,11 +116,9 @@ bot.hears('📋 Список нагадувань', (ctx) => {
   const userId = ctx.from.id;
   const reminders = loadReminders();
   const userReminders = reminders[userId] || [];
-
   if (userReminders.length === 0) {
     return ctx.reply('📭 У тебе поки немає жодного нагадування.');
   }
-
   userReminders.forEach((reminder, index) => {
     const age = reminder.date.match(/\d{4}/)
       ? ` — виповнюється ${differenceInYears(new Date(), parse(reminder.date, 'dd.MM.yyyy', new Date()))}`
@@ -150,7 +143,6 @@ const birthdayTemplates = [
 cron.schedule('* * * * *', () => {
   const reminders = loadReminders();
   const today = format(new Date(), 'dd.MM');
-
   Object.entries(reminders).forEach(([userId, userReminders]) => {
     userReminders.forEach((reminder) => {
       const parsed = parse(reminder.date, 'dd.MM.yyyy', new Date());
@@ -167,5 +159,16 @@ cron.schedule('* * * * *', () => {
     });
   });
 });
+
+app.use(express.json());
+app.use(bot.webhookCallback('/webhook'));
+app.get('/', (req, res) => res.send('OK'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Сервер слухає порт ${PORT}`);
+});
+if (process.env.RENDER_EXTERNAL_URL) {
+  bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/webhook`);
+}
 
 bot.launch();
