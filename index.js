@@ -17,48 +17,63 @@ const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(d
 const addReminderScene = new Scenes.WizardScene(
   'addReminder',
   (ctx) => {
-    const datePrompts = [
-  '📅 Кидай дату народження! Наприклад: 12.02.1990 або 1 квітня 1985.',
-  '🎂 Напиши дату, тільки не «завтра» — я ж бот, не екстрасенс! 😄',
-  '🗓️ Дата народження, будь ласка! Можна як хочеш, я розберуся.',
-  '📆 Введи дату, поки не передумав вітати 😉',
-  '👶 Коли зʼявилась ця легенда на світ? Дай дату!'
-];
-const randomPrompt = datePrompts[Math.floor(Math.random() * datePrompts.length)];
-ctx.reply(randomPrompt);
-    ctx.wizard.state.reminder = {};
-    return ctx.wizard.next();
+    try {
+      const datePrompts = [
+        '📅 Кидай дату народження! Наприклад: 12.02.1990 або 1 квітня 1985.',
+        '🎂 Напиши дату, тільки не «завтра» — я ж бот, не екстрасенс! 😄',
+        '🗓️ Дата народження, будь ласка! Можна як хочеш, я розберуся.',
+        '📆 Введи дату, поки не передумав вітати 😉',
+        '👶 Коли зʼявилась ця легенда на світ? Дай дату!'
+      ];
+      const randomPrompt = datePrompts[Math.floor(Math.random() * datePrompts.length)];
+      ctx.reply(randomPrompt);
+      ctx.wizard.state.reminder = {};
+      return ctx.wizard.next();
+    } catch (err) {
+      console.error('❌ Помилка на кроці 1 (дата):', err);
+      ctx.reply('⚠️ Щось пішло не так при введенні дати. Спробуй ще раз.');
+    }
   },
   (ctx) => {
-    if (!ctx.message || !ctx.message.text) {
-  return ctx.reply('⚠️ Будь ласка, введи дату у вигляді тексту.');
-}
-ctx.wizard.state.reminder.date = ctx.message.text;
-    ctx.reply('📝 Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
-    return ctx.wizard.next();
+    try {
+      if (!ctx.message || !ctx.message.text) {
+        return ctx.reply('⚠️ Будь ласка, введи дату у вигляді тексту.');
+      }
+      ctx.wizard.state.reminder.date = ctx.message.text;
+      ctx.reply('📝 Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
+      return ctx.wizard.next();
+    } catch (err) {
+      console.error('❌ Помилка на кроці 2 (нотатка):', err);
+      ctx.reply('⚠️ Щось пішло не так при введенні нотатки. Спробуй ще раз.');
+    }
   },
   (ctx) => {
-    if (!ctx.message || !ctx.message.text) {
-  return ctx.reply('⚠️ Надішли текст нотатки або натисни "Пропустити".');
-}
-const note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
-    const reminders = loadReminders();
-    const userId = ctx.from.id;
-    if (!reminders[userId]) reminders[userId] = [];
+    try {
+      if (!ctx.message || !ctx.message.text) {
+        return ctx.reply('⚠️ Надішли текст нотатки або натисни "Пропустити".');
+      }
+      const note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
+      const reminders = loadReminders();
+      const userId = ctx.from.id;
+      if (!reminders[userId]) reminders[userId] = [];
 
-    reminders[userId].push({ date: ctx.wizard.state.reminder.date, note });
-    saveReminders(reminders);
+      reminders[userId].push({ date: ctx.wizard.state.reminder.date, note });
+      saveReminders(reminders);
 
-    const messages = [
-  '✅ Нагадування збережено!',
-  '📅 Записав! Тепер не забудеш.',
-  '📓 Додано в мій список памʼяті!',
-  '🧠 Занотовано! Я вже запамʼятав.',
-  '🎯 Є контакт! Я нагадаю обовʼязково.'
-];
-const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-ctx.reply(randomMsg, Markup.removeKeyboard());
-    return ctx.scene.leave();
+      const messages = [
+        '✅ Нагадування збережено!',
+        '📅 Записав! Тепер не забудеш.',
+        '📓 Додано в мій список памʼяті!',
+        '🧠 Занотовано! Я вже запамʼятав.',
+        '🎯 Є контакт! Я нагадаю обовʼязково.'
+      ];
+      const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+      ctx.reply(randomMsg, Markup.removeKeyboard());
+      return ctx.scene.leave();
+    } catch (err) {
+      console.error('❌ Помилка на кроці 3 (збереження):', err);
+      ctx.reply('⚠️ Не вдалося зберегти нагадування. Спробуй ще раз.');
+    }
   }
 );
 
