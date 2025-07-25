@@ -9,6 +9,7 @@ const remindersFile = '/tmp/reminders.json';
 if (!fs.existsSync(remindersFile)) {
   fs.writeFileSync(remindersFile, '{}');
 }');
+}');
 }
 
 const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
