@@ -173,6 +173,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Сервер слухає порт ${PORT}`);
 });
 
-bot.telegram.setWebhook(`https://${process.env.RENDER_EXTERNAL_URL}/webhook`);
 
 bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/webhook`);
