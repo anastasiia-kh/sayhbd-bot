@@ -1,6 +1,8 @@
 // 📁 index.js — Telegram Bot logic
 
 const { Telegraf, Markup } = require('telegraf');
+const session = require('telegraf/session');
+bot.use(session());
 const fs = require('fs');
 const { t, getLang } = require('./i18n');
 const { loadReminders, saveReminder, deleteReminder, updateNote, getUserReminderCount } = require('./storage');
@@ -96,15 +98,15 @@ bot.on('text', async (ctx) => {
   if (ctx.session.lastCommand === txt) return;
   ctx.session.lastCommand = txt;
 
-  if ([t(ctx, 'buttons.help'), '/help'].includes(txt)) return bot.handleUpdate({ message: { text: '/help', from: ctx.from } });
-  if ([t(ctx, 'buttons.add'), '/add'].includes(txt)) return bot.handleUpdate({ message: { text: '/add', from: ctx.from } });
-  if ([t(ctx, 'buttons.list'), '/list'].includes(txt)) return bot.handleUpdate({ message: { text: '/list', from: ctx.from } });
-  if ([t(ctx, 'buttons.upcoming')].includes(txt)) {
+  if ([t(ctx, 'help'), '/help'].includes(txt)) return bot.handleUpdate({ message: { text: '/help', from: ctx.from } });
+  if ([t(ctx, 'add'), '/add'].includes(txt)) return bot.handleUpdate({ message: { text: '/add', from: ctx.from } });
+  if ([t(ctx, 'list'), '/list'].includes(txt)) return bot.handleUpdate({ message: { text: '/list', from: ctx.from } });
+  if ([t(ctx, 'upcoming')].includes(txt)) {
     const reminders = loadReminders(ctx.from.id);
     const next5 = reminders.slice(0, 5).map((r, i) => `${i + 1}. ${r.date} — ${r.note}`).join('\n') || t(ctx, 'no_reminders');
     return ctx.reply(next5);
   }
-  if ([t(ctx, 'buttons.change_language')].includes(txt)) {
+  if ([t(ctx, 'language')].includes(txt)) {
     const newLang = getLang(ctx) === 'uk' ? 'en' : 'uk';
     ctx.from.language_code = newLang;
     return sendMainMenu(ctx);
