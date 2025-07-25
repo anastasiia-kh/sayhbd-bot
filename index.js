@@ -1,282 +1,171 @@
+// 📁 index.js (оновлено з багатомовністю)
+
+require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
 const { schedule } = require('node-cron');
-const { loadReminders, saveReminders } = require('./storage');
+const { getPaidUntil, setPaidUntil, hasPaid } = require('./subscription');
+const { getLang, t } = require('./i18n');
 
-const token = process.env.BOT_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
-
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 
-const dateRegex = /^(\d{2})[./-](\d{2})[./-](\d{2}|\d{4})$/;
+const adminUserIds = ['438623792'];
+const dateRegex = /^(\d{2})[-.\/]?(\d{2})[-.\/]?(\d{4})?$/;
+const pendingEdits = {};
 
-function normalizeYear(yearStr) {
-  let yearNum = Number(yearStr);
-  if (yearStr.length === 2) {
-    yearNum = yearNum > 30 ? 1900 + yearNum : 2000 + yearNum;
-  }
-  return yearNum;
+function loadReminders(userId) {
+  const file = path.join(dataDir, `${userId}.json`);
+  if (!fs.existsSync(file)) return [];
+  const data = JSON.parse(fs.readFileSync(file));
+  return data.reminders || [];
 }
 
-function parseDate(dateStr) {
-  const match = dateStr.match(dateRegex);
-  if (!match) return null;
-  const day = match[1];
-  const month = match[2];
-  const year = normalizeYear(match[3]);
-  return `${day}-${month}-${year}`;
+function saveReminders(userId, reminders) {
+  const file = path.join(dataDir, `${userId}.json`);
+  const current = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : {};
+  fs.writeFileSync(file, JSON.stringify({ ...current, reminders }, null, 2));
 }
 
-function calculateAge(birthdate) {
-  const [day, month, year] = birthdate.split('-').map(Number);
+function calculateAge(dateStr) {
+  const [day, month, year] = dateStr.split('-').map(Number);
   if (!year) return null;
   const today = new Date();
   let age = today.getFullYear() - year;
-  const hasHadBirthday =
-    today.getMonth() + 1 > month ||
-    (today.getMonth() + 1 === month && today.getDate() >= day);
-  if (!hasHadBirthday) age--;
-  return age < 0 ? 0 : age;
+  const birthDate = new Date(today.getFullYear(), month - 1, day);
+  if (today < birthDate) age--;
+  return age;
 }
 
-const mainKeyboard = {
-  reply_markup: {
-    keyboard: [
-      ['➕ Add Reminder', '📋 View Reminders'],
-      ['✏️ Edit Reminder', '🗑️ Delete Reminder'],
-      ['🔜 Next 5 reminders', 'ℹ️ Help'],
-    ],
-    resize_keyboard: true,
-    one_time_keyboard: false,
-  },
-};
+function parseDate(input) {
+  const match = input.match(dateRegex);
+  if (!match) return null;
+  let [_, dd, mm, yyyy] = match;
+  return `${dd}-${mm}-${yyyy || ''}`.trim();
+}
 
-// /start
+function canAddReminder(userId, reminders) {
+  if (adminUserIds.includes(userId)) return true;
+  if (hasPaid(userId)) return true;
+  return reminders.length < 3;
+}
+
 bot.onText(/\/start/, (msg) => {
-  const userId = msg.chat.id;
-  const welcomeMessage = `Hi! Send:
-
-/add DD-MM-YYYY Your note
-
-to add a birthday reminder 🎉
-
-Use buttons below for actions.`;
-  bot.sendMessage(userId, welcomeMessage, mainKeyboard);
+  const lang = getLang(msg);
+  bot.sendMessage(msg.chat.id, t(lang, 'start'));
 });
 
-// Help
-bot.onText(/ℹ️ Help/, (msg) => {
-  const helpText = `Welcome to SayHBDbot!
-
-Commands:
-/add DD-MM-YYYY Your note — Add a birthday reminder
-📋 View Reminders — Show your saved reminders
-✏️ Edit Reminder — Edit an existing reminder
-🗑️ Delete Reminder — Delete a reminder
-ℹ️ Help — Show this help message
-
-Date formats supported:
-DD-MM-YYYY, DD-MM-YY,
-DD/MM/YYYY, DD/MM/YY,
-DD.MM.YYYY, DD.MM.YY
-`;
-  bot.sendMessage(msg.chat.id, helpText, mainKeyboard);
+bot.onText(/\/help/, (msg) => {
+  const lang = getLang(msg);
+  bot.sendMessage(msg.chat.id, t(lang, 'help'));
 });
 
-// Add reminder
-bot.onText(/\/add (.+)/, (msg, match) => {
-  const userId = msg.chat.id.toString();
-  const input = match[1];
-  const splitIndex = input.indexOf(' ');
-  if (splitIndex === -1) {
-    bot.sendMessage(userId, 'Please use format: /add DD-MM-YYYY Your note');
-    return;
-  }
-  const dateRaw = input.substring(0, splitIndex);
-  const note = input.substring(splitIndex + 1).trim();
+bot.onText(/\/add/, (msg) => {
+  const lang = getLang(msg);
+  bot.sendMessage(msg.chat.id, t(lang, 'enter_date'));
+  bot.once('message', (dateMsg) => {
+    const date = parseDate(dateMsg.text);
+    if (!date) return bot.sendMessage(msg.chat.id, t(lang, 'invalid_date'));
 
-  if (!dateRegex.test(dateRaw)) {
-    bot.sendMessage(userId, 'Invalid date format. Use one of supported formats.');
-    return;
-  }
-
-  const parsedDate = parseDate(dateRaw);
-  if (!parsedDate) {
-    bot.sendMessage(userId, 'Invalid date after parsing. Check input.');
-    return;
-  }
-
-  const reminders = loadReminders(userId);
-  reminders.push({ date: parsedDate, note });
-  saveReminders(userId, reminders);
-
-  bot.sendMessage(userId, `✅ Reminder saved for ${parsedDate}!`);
-});
-
-bot.onText(/➕ Add Reminder/, (msg) => {
-  bot.sendMessage(msg.chat.id, 'Send command like:\n/add DD-MM-YYYY Your note', mainKeyboard);
-});
-
-// View reminders
-bot.onText(/📋 View Reminders/, (msg) => {
-  const userId = msg.chat.id.toString();
-  let reminders = loadReminders(userId);
-  if (reminders.length === 0) {
-    bot.sendMessage(userId, 'You have no saved reminders.', mainKeyboard);
-    return;
-  }
-  reminders = reminders.sort((a, b) => {
-    const [ad, am, ay] = a.date.split('-').map(Number);
-    const [bd, bm, by] = b.date.split('-').map(Number);
-    return new Date(ay, am - 1, ad) - new Date(by, bm - 1, bd);
-  });
-  let text = 'Your saved reminders:\n\n';
-  reminders.forEach((r, i) => {
-    text += `${i + 1}. ${r.date} — ${r.note}\n`;
-  });
-  bot.sendMessage(userId, text, mainKeyboard);
-});
-
-// Next reminders
-bot.onText(/🔜 Next 5 reminders/, (msg) => {
-  bot.emit('text', { ...msg, text: '/next' });
-});
-
-// Inline keyboards for edit/delete
-function createInlineKeyboard(reminders, prefix) {
-  return {
-    reply_markup: {
-      inline_keyboard: reminders.map((r, i) => [
-        {
-          text: `${r.date} — ${r.note}`,
-          callback_data: `${prefix}_${i}`,
-        },
-      ]),
-    },
-  };
-}
-
-// Edit reminder
-bot.onText(/✏️ Edit Reminder/, (msg) => {
-  const userId = msg.chat.id.toString();
-  const reminders = loadReminders(userId);
-  if (reminders.length === 0) {
-    bot.sendMessage(userId, 'Nothing to edit.', mainKeyboard);
-    return;
-  }
-  bot.sendMessage(userId, 'Select a reminder to edit:', createInlineKeyboard(reminders, 'edit'));
-});
-
-// Delete reminder
-bot.onText(/🗑️ Delete Reminder/, (msg) => {
-  const userId = msg.chat.id.toString();
-  const reminders = loadReminders(userId);
-  if (reminders.length === 0) {
-    bot.sendMessage(userId, 'Nothing to delete.', mainKeyboard);
-    return;
-  }
-  bot.sendMessage(userId, 'Select a reminder to delete:', createInlineKeyboard(reminders, 'del'));
-});
-
-// Handle inline callbacks
-bot.on('callback_query', (query) => {
-  const userId = query.message.chat.id.toString();
-  const reminders = loadReminders(userId);
-  const data = query.data;
-
-  if (data.startsWith('edit_')) {
-    const index = parseInt(data.split('_')[1]);
-    if (isNaN(index) || !reminders[index]) {
-      bot.answerCallbackQuery(query.id, { text: 'Invalid selection.' });
-      return;
-    }
-    bot.answerCallbackQuery(query.id);
-    bot.sendMessage(userId, `Send new note text for reminder dated ${reminders[index].date}:`);
-
-    const listener = (msg) => {
-      if (msg.chat.id.toString() === userId) {
-        reminders[index].note = msg.text;
-        saveReminders(userId, reminders);
-        bot.sendMessage(userId, '✅ Reminder updated.', mainKeyboard);
-        bot.removeListener('message', listener);
+    bot.sendMessage(msg.chat.id, t(lang, 'enter_note'));
+    bot.once('message', (noteMsg) => {
+      const reminders = loadReminders(msg.from.id);
+      if (!canAddReminder(msg.from.id, reminders)) {
+        return bot.sendMessage(msg.chat.id, t(lang, 'limit_exceeded'));
       }
-    };
-    bot.on('message', listener);
-  } else if (data.startsWith('del_')) {
-    const index = parseInt(data.split('_')[1]);
-    if (isNaN(index) || !reminders[index]) {
-      bot.answerCallbackQuery(query.id, { text: 'Invalid selection.' });
-      return;
-    }
-    const removed = reminders.splice(index, 1);
-    saveReminders(userId, reminders);
-    bot.answerCallbackQuery(query.id, { text: 'Reminder deleted.' });
-    bot.sendMessage(userId, `🗑️ Deleted reminder: ${removed[0].note}`, mainKeyboard);
-  } else {
-    bot.answerCallbackQuery(query.id, { text: 'Unknown command.' });
-  }
-});
-
-bot.onText(/\/next/, (msg) => {
-  const userId = msg.chat.id.toString();
-  const reminders = loadReminders(userId);
-  if (!reminders.length) {
-    bot.sendMessage(userId, 'You have no saved reminders.', mainKeyboard);
-    return;
-  }
-
-  const today = new Date();
-  const todayMMDD = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
-
-  const sorted = reminders
-    .map(r => {
-      const [day, month] = r.date.split('-');
-      const mmdd = `${month.padStart(2, '0')}${day.padStart(2, '0')}`;
-      return { ...r, mmdd };
-    })
-    .sort((a, b) => {
-      return a.mmdd.localeCompare(b.mmdd);
+      reminders.push({ date, note: noteMsg.text });
+      saveReminders(msg.from.id, reminders);
+      bot.sendMessage(msg.chat.id, t(lang, 'reminder_added'));
     });
-
-  const upcoming = [...sorted.filter(r => r.mmdd >= todayMMDD), ...sorted.filter(r => r.mmdd < todayMMDD)];
-
-  const top5 = upcoming.slice(0, 5);
-
-  let text = `🎯 Upcoming reminders:\n\n`;
-  top5.forEach((r, i) => {
-    text += `${i + 1}. ${r.date.slice(0, 5)} — ${r.note}\n`;
   });
-
-  bot.sendMessage(userId, text, mainKeyboard);
 });
 
+bot.onText(/\/list/, (msg) => {
+  const lang = getLang(msg);
+  const reminders = loadReminders(msg.from.id);
+  if (!reminders.length) return bot.sendMessage(msg.chat.id, t(lang, 'no_reminders'));
 
-// Daily notification at 09:00
-const notifiedUsers = new Set();
+  reminders.forEach((r, index) => {
+    const age = calculateAge(r.date);
+    const ageText = age ? t(lang, 'turning_age', age) : '';
+    bot.sendMessage(msg.chat.id, `${index + 1}. ${r.date} — ${r.note}${ageText}`, {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: t(lang, 'edit'), callback_data: `edit_${index}` },
+          { text: t(lang, 'delete'), callback_data: `delete_${index}` }
+        ]]
+      }
+    });
+  });
+});
 
-schedule('0 9 * * *', () => {
+bot.on('callback_query', (query) => {
+  const userId = query.from.id;
+  const data = query.data;
+  const reminders = loadReminders(userId);
+  const index = parseInt(data.split('_')[1]);
+  const lang = getLang(query);
+
+  if (data.startsWith('delete_')) {
+    reminders.splice(index, 1);
+    saveReminders(userId, reminders);
+    bot.sendMessage(userId, t(lang, 'reminder_deleted'));
+  } else if (data.startsWith('edit_')) {
+    bot.sendMessage(userId, t(lang, 'enter_new_note'));
+    pendingEdits[userId] = index;
+  }
+});
+
+bot.on('message', (msg) => {
+  const userId = msg.from.id;
+  const lang = getLang(msg);
+  if (pendingEdits[userId] !== undefined) {
+    const reminders = loadReminders(userId);
+    reminders[pendingEdits[userId]].note = msg.text;
+    saveReminders(userId, reminders);
+    bot.sendMessage(userId, t(lang, 'note_updated'));
+    delete pendingEdits[userId];
+  }
+});
+
+bot.onText(/\/status/, (msg) => {
+  const lang = getLang(msg);
+  const until = getPaidUntil(msg.from.id);
+  if (adminUserIds.includes(msg.from.id)) {
+    return bot.sendMessage(msg.chat.id, t(lang, 'admin_access'));
+  }
+  if (!until) return bot.sendMessage(msg.chat.id, t(lang, 'no_subscription'));
+  if (until < new Date()) return bot.sendMessage(msg.chat.id, t(lang, 'subscription_expired'));
+  bot.sendMessage(msg.chat.id, t(lang, 'subscription_active', until.toLocaleDateString()));
+});
+
+schedule('* * * * *', () => {
   const today = new Date();
   const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   const users = fs.readdirSync(dataDir).filter((file) => file.endsWith('.json'));
 
   users.forEach((userFile) => {
     const userId = userFile.replace('.json', '');
-    const reminders = loadReminders(userId);
+    const data = JSON.parse(fs.readFileSync(path.join(dataDir, userFile)));
+    const reminders = data.reminders || [];
+
     reminders.forEach((r) => {
-      if (!r.date) return;
-      if (r.date.slice(0, 5) === todayStr) {
+      if (r.date && r.date.slice(0, 5) === todayStr) {
         const age = calculateAge(r.date);
         const note = r.note?.trim();
-        const ageText = age ? ` — turning ${age}!` : '!';
-        const message = note
-          ? `🎂 Don’t forget: ${note}${ageText} 🎈🎉`
-          : `🎉 Someone is having a birthday${ageText}`;
-        bot.sendMessage(userId, message);
+        const ageText = age ? t(data.lang || 'uk', 'today_age', age) : t(data.lang || 'uk', 'today');
+        bot.sendMessage(userId, `${t(data.lang || 'uk', 'today_prefix')} ${note}${ageText}`);
       }
     });
+
+    if (!adminUserIds.includes(userId) && data.paidUntil) {
+      const paidUntil = new Date(data.paidUntil);
+      const diffDays = Math.ceil((paidUntil - today) / (1000 * 60 * 60 * 24));
+      if ([3, 1, 0].includes(diffDays)) {
+        bot.sendMessage(userId, t(data.lang || 'uk', 'subscription_ending', diffDays));
+      }
+    }
   });
 });
-
-console.log('🤖 Bot is running...');
