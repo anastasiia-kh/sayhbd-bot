@@ -1,4 +1,5 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
+const cron = require('node-cron');
 const fs = require('fs');
 const { parse, format, isToday } = require('date-fns');
 
@@ -16,13 +17,13 @@ const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(d
 const addReminderScene = new Scenes.WizardScene(
   'addReminder',
   (ctx) => {
-    ctx.reply('Введіть дату народження (наприклад 12.02.1990):');
+    ctx.reply('📅 Введіть дату народження (наприклад 12.02.1990):');
     ctx.wizard.state.reminder = {};
     return ctx.wizard.next();
   },
   (ctx) => {
     ctx.wizard.state.reminder.date = ctx.message.text;
-    ctx.reply('Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
+    ctx.reply('📝 Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
     return ctx.wizard.next();
   },
   (ctx) => {
@@ -34,7 +35,15 @@ const addReminderScene = new Scenes.WizardScene(
     reminders[userId].push({ date: ctx.wizard.state.reminder.date, note });
     saveReminders(reminders);
 
-    ctx.reply('Нагадування збережено!', Markup.removeKeyboard());
+    const messages = [
+  '✅ Нагадування збережено!',
+  '📅 Записав! Тепер не забудеш.',
+  '📓 Додано в мій список памʼяті!',
+  '🧠 Занотовано! Я вже запамʼятав.',
+  '🎯 Є контакт! Я нагадаю обовʼязково.'
+];
+const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+ctx.reply(randomMsg, Markup.removeKeyboard());
     return ctx.scene.leave();
   }
 );
@@ -43,13 +52,19 @@ const stage = new Scenes.Stage([addReminderScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
-bot.start((ctx) => ctx.reply('Привіт! Я бот для нагадувань про дні народження.\n/add — додати\n/list — список нагадувань'));
-
-bot.command('add', (ctx) => ctx.scene.enter('addReminder'));
+bot.start((ctx) => {
+  const name = ctx.from.first_name || 'друже';
+  ctx.reply(
+    `👋 Привіт, ${name}!
+Я той самий бот, якого не вистачало в твоєму житті, коли ти писав «З Днем народження» на два дні пізніше... 😏🎂
+Додай нагадування — і більше жодних фейлів!`,
+    Markup.keyboard([['📋 Список нагадувань', '➕ Додати нагадування']]).resize()
+  );
+});
 
 bot.command('list', (ctx) => {
   const reminders = loadReminders()[ctx.from.id] || [];
-  if (!reminders.length) return ctx.reply('Немає збережених нагадувань.');
+  if (!reminders.length) return ctx.reply('📭 Немає збережених нагадувань.');
 
   reminders.forEach((r, i) => {
     const text = `${i + 1}. ${r.date}${r.note ? ' — ' + r.note : ''}`;
@@ -66,7 +81,15 @@ bot.action(/delete_(\d+)/, (ctx) => {
   const userId = ctx.from.id;
   if (reminders[userId]) reminders[userId].splice(idx, 1);
   saveReminders(reminders);
-  ctx.editMessageText('Нагадування видалено!');
+  const deleteMessages = [
+  '🗑 Нагадування видалено!',
+  '💨 І слід простиг!',
+  '🚮 Викинув як старий календар.',
+  '❌ Готово! Можна забути про це.',
+  '📤 Видалено без жалю... майже 😢'
+];
+const deletedMsg = deleteMessages[Math.floor(Math.random() * deleteMessages.length)];
+ctx.editMessageText(deletedMsg);
 });
 
 bot.action(/edit_(\d+)/, (ctx) => {
@@ -74,14 +97,14 @@ bot.action(/edit_(\d+)/, (ctx) => {
   ctx.session.editIdx = idx;
   ctx.session.tempReminder = { ...loadReminders()[ctx.from.id][idx] };
   ctx.session.editStep = 'date';
-  ctx.reply('Введіть нову дату (або натисніть "Далі")', Markup.inlineKeyboard([
+  ctx.reply('📅 Введіть нову дату (або натисніть "Далі")', Markup.inlineKeyboard([
     Markup.button.callback('➡️ Далі', 'skip_to_note')
   ]));
 });
 
 bot.action('skip_to_note', (ctx) => {
   ctx.session.editStep = 'note';
-  ctx.reply('Введіть нову нотатку (або натисніть "Зберегти")', Markup.inlineKeyboard([
+  ctx.reply('📝 Введіть нову нотатку (або натисніть "Зберегти")', Markup.inlineKeyboard([
     Markup.button.callback('✅ Зберегти', 'save_edit')
   ]));
 });
@@ -94,11 +117,19 @@ bot.action('save_edit', (ctx) => {
   const updated = ctx.session.tempReminder;
 
   if (original.date === updated.date && original.note === updated.note) {
-    ctx.reply('Жодних змін не внесено.');
+    ctx.reply('ℹ️ Жодних змін не внесено.');
   } else {
     reminders[userId][idx] = updated;
     saveReminders(reminders);
-    ctx.reply('Нагадування оновлено!');
+    const editMessages = [
+  '✅ Нагадування оновлено!',
+  '🛠️ Підрихтував, як ти просив!',
+  '📋 Нові дані збережено!',
+  '🔁 Все оновлено, як новеньке!',
+  '✏️ Виправив! Більше ніяких помилок.'
+];
+const editedMsg = editMessages[Math.floor(Math.random() * editMessages.length)];
+ctx.reply(editedMsg);
   }
   delete ctx.session.editIdx;
   delete ctx.session.editStep;
@@ -118,7 +149,7 @@ bot.on('text', (ctx) => {
       ]));
     } else if (step === 'note') {
       ctx.session.tempReminder.note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
-      ctx.reply('Натисніть "Зберегти", щоб підтвердити зміни.', Markup.inlineKeyboard([
+      ctx.reply('💾 Натисніть "Зберегти", щоб підтвердити зміни.', Markup.inlineKeyboard([
         Markup.button.callback('✅ Зберегти', 'save_edit')
       ]));
     }
@@ -139,7 +170,10 @@ const checkReminders = () => {
   });
 };
 
-setInterval(checkReminders, 1000 * 60 * 60 * 24);
+cron.schedule('*/2 * * * *', () => {
+  console.log('⏰ Перевірка нагадувань о 09:00');
+  checkReminders();
+});
 
 bot.launch();
 console.log('Бот запущено');
