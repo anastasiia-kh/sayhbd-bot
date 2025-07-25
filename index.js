@@ -2,7 +2,7 @@ const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const fs = require('fs');
 const { parse, format, isToday } = require('date-fns');
 
-const bot = new Telegraf('YOUR_BOT_TOKEN');
+const bot = new Telegraf('7520027372:AAG6I_xS7O8adDg83Nue6zb8gNljDFVWMe4');
 const remindersFile = 'reminders.json';
 
 // Helpers
