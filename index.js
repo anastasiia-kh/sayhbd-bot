@@ -115,7 +115,7 @@ bot.hears('📋 Список нагадувань', (ctx) => {
   });
 });
 
-cron.schedule('*/2 * * * *', () => {
+cron.schedule('* * * *', () => {
   const reminders = loadReminders();
   const today = format(new Date(), 'dd.MM');
 
