@@ -2,8 +2,9 @@ const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
 const { schedule } = require('node-cron');
+const { loadReminders, saveReminders } = require('./storage');
 
-const token = '7520027372:AAG6I_xS7O8adDg83Nue6zb8gNljDFVWMe4'; // Встав свій токен сюди
+const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
 const dataDir = path.join(__dirname, 'data');
@@ -28,24 +29,6 @@ function parseDate(dateStr) {
   return `${day}-${month}-${year}`;
 }
 
-function getUserFilePath(userId) {
-  return path.join(dataDir, `${userId}.json`);
-}
-
-function loadReminders(userId) {
-  const filePath = getUserFilePath(userId);
-  if (fs.existsSync(filePath)) {
-    const data = fs.readFileSync(filePath);
-    return JSON.parse(data);
-  }
-  return [];
-}
-
-function saveReminders(userId, reminders) {
-  const filePath = getUserFilePath(userId);
-  fs.writeFileSync(filePath, JSON.stringify(reminders, null, 2));
-}
-
 function calculateAge(birthdate) {
   const [day, month, year] = birthdate.split('-').map(Number);
   if (!year) return null;
@@ -63,7 +46,7 @@ const mainKeyboard = {
     keyboard: [
       ['➕ Add Reminder', '📋 View Reminders'],
       ['✏️ Edit Reminder', '🗑️ Delete Reminder'],
-      ['ℹ️ Help'],
+      ['🔜 Next 5 reminders', 'ℹ️ Help'],
     ],
     resize_keyboard: true,
     one_time_keyboard: false,
@@ -102,7 +85,7 @@ DD.MM.YYYY, DD.MM.YY
   bot.sendMessage(msg.chat.id, helpText, mainKeyboard);
 });
 
-// Add reminder command
+// Add reminder
 bot.onText(/\/add (.+)/, (msg, match) => {
   const userId = msg.chat.id.toString();
   const input = match[1];
@@ -136,7 +119,7 @@ bot.onText(/➕ Add Reminder/, (msg) => {
   bot.sendMessage(msg.chat.id, 'Send command like:\n/add DD-MM-YYYY Your note', mainKeyboard);
 });
 
-// View reminders button
+// View reminders
 bot.onText(/📋 View Reminders/, (msg) => {
   const userId = msg.chat.id.toString();
   let reminders = loadReminders(userId);
@@ -156,7 +139,12 @@ bot.onText(/📋 View Reminders/, (msg) => {
   bot.sendMessage(userId, text, mainKeyboard);
 });
 
-// Inline keyboard helpers for Edit and Delete menus
+// Next reminders
+bot.onText(/🔜 Next 5 reminders/, (msg) => {
+  bot.emit('text', { ...msg, text: '/next' });
+});
+
+// Inline keyboards for edit/delete
 function createInlineKeyboard(reminders, prefix) {
   return {
     reply_markup: {
@@ -170,7 +158,7 @@ function createInlineKeyboard(reminders, prefix) {
   };
 }
 
-// Edit Reminder button — shows inline keyboard to pick which to edit
+// Edit reminder
 bot.onText(/✏️ Edit Reminder/, (msg) => {
   const userId = msg.chat.id.toString();
   const reminders = loadReminders(userId);
@@ -181,7 +169,7 @@ bot.onText(/✏️ Edit Reminder/, (msg) => {
   bot.sendMessage(userId, 'Select a reminder to edit:', createInlineKeyboard(reminders, 'edit'));
 });
 
-// Delete Reminder button — shows inline keyboard to pick which to delete
+// Delete reminder
 bot.onText(/🗑️ Delete Reminder/, (msg) => {
   const userId = msg.chat.id.toString();
   const reminders = loadReminders(userId);
@@ -192,7 +180,7 @@ bot.onText(/🗑️ Delete Reminder/, (msg) => {
   bot.sendMessage(userId, 'Select a reminder to delete:', createInlineKeyboard(reminders, 'del'));
 });
 
-// Handle inline callback queries for edit and delete
+// Handle inline callbacks
 bot.on('callback_query', (query) => {
   const userId = query.message.chat.id.toString();
   const reminders = loadReminders(userId);
@@ -207,7 +195,6 @@ bot.on('callback_query', (query) => {
     bot.answerCallbackQuery(query.id);
     bot.sendMessage(userId, `Send new note text for reminder dated ${reminders[index].date}:`);
 
-    // Next message from user will be new note text
     const listener = (msg) => {
       if (msg.chat.id.toString() === userId) {
         reminders[index].note = msg.text;
@@ -232,7 +219,41 @@ bot.on('callback_query', (query) => {
   }
 });
 
-// Daily reminder scheduler (one notification per user per day)
+bot.onText(/\/next/, (msg) => {
+  const userId = msg.chat.id.toString();
+  const reminders = loadReminders(userId);
+  if (!reminders.length) {
+    bot.sendMessage(userId, 'You have no saved reminders.', mainKeyboard);
+    return;
+  }
+
+  const today = new Date();
+  const todayMMDD = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+
+  const sorted = reminders
+    .map(r => {
+      const [day, month] = r.date.split('-');
+      const mmdd = `${month.padStart(2, '0')}${day.padStart(2, '0')}`;
+      return { ...r, mmdd };
+    })
+    .sort((a, b) => {
+      return a.mmdd.localeCompare(b.mmdd);
+    });
+
+  const upcoming = [...sorted.filter(r => r.mmdd >= todayMMDD), ...sorted.filter(r => r.mmdd < todayMMDD)];
+
+  const top5 = upcoming.slice(0, 5);
+
+  let text = `🎯 Upcoming reminders:\n\n`;
+  top5.forEach((r, i) => {
+    text += `${i + 1}. ${r.date.slice(0, 5)} — ${r.note}\n`;
+  });
+
+  bot.sendMessage(userId, text, mainKeyboard);
+});
+
+
+// Daily notification at 09:00
 const notifiedUsers = new Set();
 
 schedule('0 9 * * *', () => {
@@ -242,7 +263,6 @@ schedule('0 9 * * *', () => {
 
   users.forEach((userFile) => {
     const userId = userFile.replace('.json', '');
-
     const reminders = loadReminders(userId);
     reminders.forEach((r) => {
       if (!r.date) return;
