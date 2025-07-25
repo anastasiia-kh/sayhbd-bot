@@ -163,7 +163,7 @@ bot.command('add', (ctx) => ctx.scene.enter('addReminder'));
 bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 
 const WEBHOOK_PATH = `/bot${process.env.BOT_TOKEN}`;
-const WEBHOOK_URL = `https://${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
+const WEBHOOK_URL = `${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
 bot.telegram.setWebhook(WEBHOOK_URL);
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
