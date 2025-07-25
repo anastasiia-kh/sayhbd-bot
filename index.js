@@ -60,6 +60,18 @@ const addReminderScene = new Scenes.WizardScene(
       if (!parsedDate || isNaN(parsedDate)) {
         return ctx.reply('⚠️ Не вдалося розпізнати дату. Спробуй у форматі: 12.02.1990, 2/12/95 або 02 грудня 1995.');
       }
+
+      // Нормалізація коротких років
+      if (parsedDate.getFullYear() < 100) {
+        const year = parsedDate.getFullYear();
+        const now = new Date();
+        const y2000 = new Date(now);
+        y2000.setFullYear(2000 + year);
+        const y1900 = new Date(now);
+        y1900.setFullYear(1900 + year);
+        parsedDate = Math.abs(now - y2000) < Math.abs(now - y1900) ? y2000 : y1900;
+      }
+
       const normalized = format(parsedDate, 'dd.MM.yyyy');
       ctx.wizard.state.reminder.date = normalized;
       ctx.reply('📝 Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
@@ -137,7 +149,12 @@ const birthdayTemplates = [
   `🎉 Сьогодні важлива дата!\n📅 {date} — виповнюється {age} років!\n{note}`,
   `🦄 Увага-увага! День народження на горизонті!\n🎂 {date} — {age} років!\n{note}`,
   `🔔 Біп-боп! Святковий алерт!\n🗓 {date} — святкуємо {age} років!\n{note}`,
-  `🌟 {date} — {age} років\n{note}`
+  `🎈 Йо-хо-хо! Хтось сьогодні святкує!\n📆 {date} — {age} років на планеті!\n{note}`,
+  `👑 Королівське свято!\n📅 {date} — {age} років мудрості й чарівності!\n{note}`,
+  `🚀 Запускаємо феєрверки! Бо сьогодні особливий день!\n🗓 {date} — {age} років святкування!\n{note}`,
+  `🕺 Танці, шампанське і торт!\n📅 {date} — {age} років магії!\n{note}`,
+  `🌈 День, коли народилась легенда!\n📅 {date} — {age} років!\n{note}`,
+  `📣 Алло, всім увага!\n{date} — день народження!\n🎁 {age} років — круто ж як!\n{note}`
 ];
 
 cron.schedule('* * * * *', () => {
@@ -154,7 +171,12 @@ cron.schedule('* * * * *', () => {
           .replace('{date}', reminder.date)
           .replace('{age}', age)
           .replace('{note}', reminder.note || '');
-        bot.telegram.sendMessage(userId, text);
+        bot.telegram.sendMessage(userId, text, {
+          reply_markup: {
+            keyboard: [['📋 Список нагадувань']],
+            resize_keyboard: true
+          }
+        });
       }
     });
   });
