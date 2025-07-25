@@ -2,12 +2,11 @@ const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const cron = require('node-cron');
 const fs = require('fs');
 const express = require('express');
-const { parse, format, isToday } = require('date-fns');
+const { parse, format, isToday, differenceInYears } = require('date-fns');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const remindersFile = '/tmp/reminders.json';
 
-// Автоматичне створення reminders.json, якщо його не існує
 if (!fs.existsSync(remindersFile)) {
   fs.writeFileSync(remindersFile, '{}');
 }
@@ -15,20 +14,19 @@ if (!fs.existsSync(remindersFile)) {
 const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
 const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(data, null, 2));
 
-
 const addReminderScene = new Scenes.WizardScene(
   'addReminder',
   (ctx) => {
     try {
-      const datePrompts = [
+      const prompts = [
         '📅 Кидай дату народження! Наприклад: 12.02.1990 або 1 квітня 1985.',
         '🎂 Напиши дату, тільки не «завтра» — я ж бот, не екстрасенс! 😄',
         '🗓️ Дата народження, будь ласка! Можна як хочеш, я розберуся.',
         '📆 Введи дату, поки не передумав вітати 😉',
         '👶 Коли зʼявилась ця легенда на світ? Дай дату!'
       ];
-      const randomPrompt = datePrompts[Math.floor(Math.random() * datePrompts.length)];
-      ctx.reply(randomPrompt);
+      const message = prompts[Math.floor(Math.random() * prompts.length)];
+      ctx.reply(message);
       ctx.wizard.state.reminder = {};
       return ctx.wizard.next();
     } catch (err) {
@@ -80,7 +78,6 @@ const addReminderScene = new Scenes.WizardScene(
 );
 
 const stage = new Scenes.Stage([addReminderScene]);
-bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 bot.use(session());
 bot.use(stage.middleware());
 
@@ -88,141 +85,55 @@ bot.start((ctx) => {
   const name = ctx.from.first_name || 'друже';
   ctx.reply(
     `👋 Привіт, ${name}!
-Я той самий бот, якого не вистачало в твоєму житті, коли ти писав «З Днем народження» на два дні пізніше... 😏🎂
-Додай нагадування — і більше жодних фейлів!`,
+Я той самий бот, якого не вистачало в твоєму житті, коли ти писав «З Днем народження» на два дні пізніше... 😏🎂\nДодай нагадування — і більше жодних фейлів!`,
     Markup.keyboard([['📋 Список нагадувань', '➕ Додати нагадування']]).resize()
   );
 });
 
-bot.command('list', (ctx) => {
-  const allReminders = loadReminders();
-  const reminders = allReminders[ctx.from.id] || [];
-  if (!reminders.length) return ctx.reply('📭 Немає збережених нагадувань.');
-
-  reminders.forEach((r, i) => {
-    const text = `${i + 1}. ${r.date}${r.note ? ' — ' + r.note : ''}`;
-    ctx.reply(text, Markup.inlineKeyboard([
-      Markup.button.callback('✏️ Редагувати', `edit_${i}`),
-      Markup.button.callback('🗑 Видалити', `delete_${i}`)
-    ]));
-  });
-});
+bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 
 bot.hears('📋 Список нагадувань', (ctx) => {
-  const allReminders = loadReminders();
-  const reminders = allReminders[ctx.from.id] || [];
-  if (!reminders.length) return ctx.reply('📭 Немає збережених нагадувань.');
+  const userId = ctx.from.id;
+  const reminders = loadReminders();
+  const userReminders = reminders[userId] || [];
 
-  reminders.forEach((r, i) => {
-    const text = `${i + 1}. ${r.date}${r.note ? ' — ' + r.note : ''}`;
-    ctx.reply(text, Markup.inlineKeyboard([
-      Markup.button.callback('✏️ Редагувати', `edit_${i}`),
-      Markup.button.callback('🗑 Видалити', `delete_${i}`)
+  if (userReminders.length === 0) {
+    return ctx.reply('📭 У тебе поки немає жодного нагадування.');
+  }
+
+  userReminders.forEach((reminder, index) => {
+    const age = reminder.date.match(/\d{4}/)
+      ? ` — виповнюється ${differenceInYears(new Date(), parse(reminder.date, 'dd.MM.yyyy', new Date()))}`
+      : '';
+    const caption = `🎉 ${reminder.date}${age}${reminder.note ? `\n📝 ${reminder.note}` : ''}`;
+    ctx.reply(caption, Markup.inlineKeyboard([
+      [
+        Markup.button.callback('✏️ Редагувати', `edit_${index}`),
+        Markup.button.callback('🗑️ Видалити', `delete_${index}`)
+      ]
     ]));
   });
 });
 
-bot.action(/delete_(\d+)/, (ctx) => {
-  const idx = Number(ctx.match[1]);
+cron.schedule('*/2 * * * *', () => {
   const reminders = loadReminders();
-  const userId = ctx.from.id;
-  if (reminders[userId]) reminders[userId].splice(idx, 1);
-  saveReminders(reminders);
-  const deleteMessages = [
-  '🗑 Нагадування видалено!',
-  '💨 І слід простиг!',
-  '🚮 Викинув як старий календар.',
-  '❌ Готово! Можна забути про це.',
-  '📤 Видалено без жалю... майже 😢'
-];
-const deletedMsg = deleteMessages[Math.floor(Math.random() * deleteMessages.length)];
-ctx.editMessageText(deletedMsg);
-});
+  const today = format(new Date(), 'dd.MM');
 
-bot.action(/edit_(\d+)/, (ctx) => {
-  const idx = Number(ctx.match[1]);
-  ctx.session.editIdx = idx;
-  ctx.session.tempReminder = { ...loadReminders()[ctx.from.id][idx] };
-  ctx.session.editStep = 'date';
-  ctx.reply('📅 Введіть нову дату (або натисніть "Далі")', Markup.inlineKeyboard([
-    Markup.button.callback('➡️ Далі', 'skip_to_note')
-  ]));
-});
-
-bot.action('skip_to_note', (ctx) => {
-  ctx.session.editStep = 'note';
-  ctx.reply('📝 Введіть нову нотатку (або натисніть "Зберегти")', Markup.inlineKeyboard([
-    Markup.button.callback('✅ Зберегти', 'save_edit')
-  ]));
-});
-
-bot.action('save_edit', (ctx) => {
-  const reminders = loadReminders();
-  const userId = ctx.from.id;
-  const idx = ctx.session.editIdx;
-  const original = reminders[userId][idx];
-  const updated = ctx.session.tempReminder;
-
-  if (original.date === updated.date && original.note === updated.note) {
-    ctx.reply('ℹ️ Жодних змін не внесено.');
-  } else {
-    reminders[userId][idx] = updated;
-    saveReminders(reminders);
-    const editMessages = [
-  '✅ Нагадування оновлено!',
-  '🛠️ Підрихтував, як ти просив!',
-  '📋 Нові дані збережено!',
-  '🔁 Все оновлено, як новеньке!',
-  '✏️ Виправив! Більше ніяких помилок.'
-];
-const editedMsg = editMessages[Math.floor(Math.random() * editMessages.length)];
-ctx.reply(editedMsg);
-  }
-  delete ctx.session.editIdx;
-  delete ctx.session.editStep;
-  delete ctx.session.tempReminder;
-});
-
-bot.on('text', (ctx) => {
-  if (ctx.session.editIdx !== undefined) {
-    const userId = ctx.from.id;
-    const step = ctx.session.editStep;
-
-    if (step === 'date') {
-      ctx.session.tempReminder.date = ctx.message.text;
-      ctx.session.editStep = 'note';
-      ctx.reply('Тепер введіть нову нотатку (або натисніть "Зберегти")', Markup.inlineKeyboard([
-        Markup.button.callback('✅ Зберегти', 'save_edit')
-      ]));
-    } else if (step === 'note') {
-      ctx.session.tempReminder.note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
-      ctx.reply('💾 Натисніть "Зберегти", щоб підтвердити зміни.', Markup.inlineKeyboard([
-        Markup.button.callback('✅ Зберегти', 'save_edit')
-      ]));
-    }
-  }
-});
-
-const checkReminders = () => {
-  const reminders = loadReminders();
-  Object.entries(reminders).forEach(([userId, items]) => {
-    items.forEach((item) => {
-      const parsedDate = parse(item.date, 'dd.MM.yyyy', new Date());
-      if (isToday(parsedDate)) {
-        const age = new Date().getFullYear() - parsedDate.getFullYear();
-        const ageText = age > 0 ? ` — виповнюється ${age} років!` : '';
-        bot.telegram.sendMessage(userId, `🎉 Сьогодні день народження: ${item.note || ''}${ageText}`);
+  Object.entries(reminders).forEach(([userId, userReminders]) => {
+    userReminders.forEach((reminder) => {
+      const parsed = parse(reminder.date, 'dd.MM.yyyy', new Date());
+      const reminderDate = format(parsed, 'dd.MM');
+      if (reminderDate === today) {
+        const age = differenceInYears(new Date(), parsed);
+        const text = `🎈 Сьогодні у когось день народження!
+📅 ${reminder.date} — виповнюється ${age}!
+${reminder.note ? '📝 ' + reminder.note : ''}`;
+        bot.telegram.sendMessage(userId, text);
       }
     });
   });
-};
-
-cron.schedule('*/2 * * * *', () => {
-  console.log('⏰ Перевірка нагадувань (кожні 2 хв)');
-  checkReminders();
 });
 
-// Express Webhook
 const app = express();
 app.use(express.json());
 app.use(bot.webhookCallback('/webhook'));
@@ -232,5 +143,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Сервер слухає порт ${PORT}`);
 });
 
-// Установка webhook при запуску
 bot.telegram.setWebhook(`https://${process.env.RENDER_EXTERNAL_URL}/webhook`);
