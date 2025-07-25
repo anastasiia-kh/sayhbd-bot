@@ -10,7 +10,6 @@ if (!fs.existsSync(remindersFile)) {
   fs.writeFileSync(remindersFile, '{}');
 }
 
-
 const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
 const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(data, null, 2));
 
@@ -73,26 +72,55 @@ bot.action(/delete_(\d+)/, (ctx) => {
 bot.action(/edit_(\d+)/, (ctx) => {
   const idx = Number(ctx.match[1]);
   ctx.session.editIdx = idx;
-  ctx.reply('Введіть нову дату (наприклад 12.02.1990):');
+  ctx.session.tempReminder = { ...loadReminders()[ctx.from.id][idx] };
   ctx.session.editStep = 'date';
+  ctx.reply('Введіть нову дату (або натисніть "Далі")', Markup.inlineKeyboard([
+    Markup.button.callback('➡️ Далі', 'skip_to_note')
+  ]));
+});
+
+bot.action('skip_to_note', (ctx) => {
+  ctx.session.editStep = 'note';
+  ctx.reply('Введіть нову нотатку (або натисніть "Зберегти")', Markup.inlineKeyboard([
+    Markup.button.callback('✅ Зберегти', 'save_edit')
+  ]));
+});
+
+bot.action('save_edit', (ctx) => {
+  const reminders = loadReminders();
+  const userId = ctx.from.id;
+  const idx = ctx.session.editIdx;
+  const original = reminders[userId][idx];
+  const updated = ctx.session.tempReminder;
+
+  if (original.date === updated.date && original.note === updated.note) {
+    ctx.reply('Жодних змін не внесено.');
+  } else {
+    reminders[userId][idx] = updated;
+    saveReminders(reminders);
+    ctx.reply('Нагадування оновлено!');
+  }
+  delete ctx.session.editIdx;
+  delete ctx.session.editStep;
+  delete ctx.session.tempReminder;
 });
 
 bot.on('text', (ctx) => {
   if (ctx.session.editIdx !== undefined) {
-    const reminders = loadReminders();
     const userId = ctx.from.id;
+    const step = ctx.session.editStep;
 
-    if (ctx.session.editStep === 'date') {
-      reminders[userId][ctx.session.editIdx].date = ctx.message.text;
+    if (step === 'date') {
+      ctx.session.tempReminder.date = ctx.message.text;
       ctx.session.editStep = 'note';
-      saveReminders(reminders);
-      ctx.reply('Тепер введіть нотатку або напишіть "Пропустити"');
-    } else if (ctx.session.editStep === 'note') {
-      reminders[userId][ctx.session.editIdx].note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
-      saveReminders(reminders);
-      ctx.reply('Нагадування оновлено!');
-      delete ctx.session.editIdx;
-      delete ctx.session.editStep;
+      ctx.reply('Тепер введіть нову нотатку (або натисніть "Зберегти")', Markup.inlineKeyboard([
+        Markup.button.callback('✅ Зберегти', 'save_edit')
+      ]));
+    } else if (step === 'note') {
+      ctx.session.tempReminder.note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
+      ctx.reply('Натисніть "Зберегти", щоб підтвердити зміни.', Markup.inlineKeyboard([
+        Markup.button.callback('✅ Зберегти', 'save_edit')
+      ]));
     }
   }
 });
