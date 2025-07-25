@@ -3,8 +3,6 @@ const cron = require('node-cron');
 const fs = require('fs');
 const express = require('express');
 const { parse, format, isToday, differenceInYears } = require('date-fns');
-const { uk } = require('date-fns/locale');
-
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
@@ -64,7 +62,7 @@ const addReminderScene = new Scenes.WizardScene(
       let parsedDate;
       for (const formatStr of dateVariants) {
         try {
-          parsedDate = parse(userInput, formatStr, new Date(), { locale: uk });
+          parsedDate = parse(userInput, formatStr, new Date());
           if (!isNaN(parsedDate)) break;
         } catch {}
       }
@@ -163,14 +161,11 @@ bot.use(stage.middleware());
 
 bot.command('add', (ctx) => ctx.scene.enter('addReminder'));
 bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
-bot.start((ctx) => {
-  ctx.reply(
-    '👋 Привіт! Я нагадаю тобі про дні народження 🎉\nОбери дію:',
-    Markup.keyboard([['➕ Додати нагадування', '📋 Список нагадувань']]).resize()
-  );
-});
 
-bot.launch();
+const WEBHOOK_PATH = `/bot${process.env.BOT_TOKEN}`;
+const WEBHOOK_URL = `https://${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
+bot.telegram.setWebhook(WEBHOOK_URL);
+app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 const PORT = process.env.PORT || 3000;
 app.get('/', (req, res) => {
