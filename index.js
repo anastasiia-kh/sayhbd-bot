@@ -3,6 +3,8 @@ const cron = require('node-cron');
 const fs = require('fs');
 const express = require('express');
 const { parse, format, isToday, differenceInYears } = require('date-fns');
+const { uk } = require('date-fns/locale');
+
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
@@ -62,7 +64,7 @@ const addReminderScene = new Scenes.WizardScene(
       let parsedDate;
       for (const formatStr of dateVariants) {
         try {
-          parsedDate = parse(userInput, formatStr, new Date());
+          parsedDate = parse(userInput, formatStr, new Date(), { locale: uk });
           if (!isNaN(parsedDate)) break;
         } catch {}
       }
