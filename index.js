@@ -3,11 +3,12 @@ const fs = require('fs');
 const { parse, format, isToday } = require('date-fns');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const remindersFile = './reminders.json';
+const remindersFile = '/tmp/reminders.json';
 
 // Автоматичне створення reminders.json, якщо його не існує
 if (!fs.existsSync(remindersFile)) {
   fs.writeFileSync(remindersFile, '{}');
+}');
 }
 
 const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
