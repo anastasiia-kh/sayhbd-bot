@@ -3,7 +3,7 @@ const fs = require('fs');
 const { parse, format, isToday } = require('date-fns');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const remindersFile = '/data/reminders.json';
+const remindersFile = './reminders.json';
 
 if (!fs.existsSync('/data')) {
   fs.mkdirSync('/data', { recursive: true });
