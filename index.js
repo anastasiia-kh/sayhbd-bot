@@ -2,18 +2,16 @@ const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const fs = require('fs');
 const { parse, format, isToday } = require('date-fns');
 
-const bot = new Telegraf('7520027372:AAG6I_xS7O8adDg83Nue6zb8gNljDFVWMe4');
-const remindersFile = 'reminders.json';
+const bot = new Telegraf(process.env.BOT_TOKEN);
+const remindersFile = '/data/reminders.json';
 
-// Helpers
 const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
 const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(data, null, 2));
 
-// Scenes
 const addReminderScene = new Scenes.WizardScene(
   'addReminder',
   (ctx) => {
-    ctx.reply('Введіть дату народження (будь-який формат, наприклад 12.02.1990):');
+    ctx.reply('Введіть дату народження (наприклад 12.02.1990):');
     ctx.wizard.state.reminder = {};
     return ctx.wizard.next();
   },
@@ -40,7 +38,6 @@ const stage = new Scenes.Stage([addReminderScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
-// Commands
 bot.start((ctx) => ctx.reply('Привіт! Я бот для нагадувань про дні народження.\n/add — додати\n/list — список нагадувань'));
 
 bot.command('add', (ctx) => ctx.scene.enter('addReminder'));
@@ -50,11 +47,50 @@ bot.command('list', (ctx) => {
   if (!reminders.length) return ctx.reply('Немає збережених нагадувань.');
 
   reminders.forEach((r, i) => {
-    ctx.reply(`${i + 1}. ${r.date} — ${r.note || 'без нотатки'}`);
+    const text = `${i + 1}. ${r.date}${r.note ? ' — ' + r.note : ''}`;
+    ctx.reply(text, Markup.inlineKeyboard([
+      Markup.button.callback('✏️ Редагувати', `edit_${i}`),
+      Markup.button.callback('🗑 Видалити', `delete_${i}`)
+    ]));
   });
 });
 
-// Щоденні сповіщення
+bot.action(/delete_(\d+)/, (ctx) => {
+  const idx = Number(ctx.match[1]);
+  const reminders = loadReminders();
+  const userId = ctx.from.id;
+  if (reminders[userId]) reminders[userId].splice(idx, 1);
+  saveReminders(reminders);
+  ctx.editMessageText('Нагадування видалено!');
+});
+
+bot.action(/edit_(\d+)/, (ctx) => {
+  const idx = Number(ctx.match[1]);
+  ctx.session.editIdx = idx;
+  ctx.reply('Введіть нову дату (наприклад 12.02.1990):');
+  ctx.session.editStep = 'date';
+});
+
+bot.on('text', (ctx) => {
+  if (ctx.session.editIdx !== undefined) {
+    const reminders = loadReminders();
+    const userId = ctx.from.id;
+
+    if (ctx.session.editStep === 'date') {
+      reminders[userId][ctx.session.editIdx].date = ctx.message.text;
+      ctx.session.editStep = 'note';
+      saveReminders(reminders);
+      ctx.reply('Тепер введіть нотатку або натисніть "Пропустити"');
+    } else if (ctx.session.editStep === 'note') {
+      reminders[userId][ctx.session.editIdx].note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
+      saveReminders(reminders);
+      ctx.reply('Нагадування оновлено!');
+      delete ctx.session.editIdx;
+      delete ctx.session.editStep;
+    }
+  }
+});
+
 const checkReminders = () => {
   const reminders = loadReminders();
   Object.entries(reminders).forEach(([userId, items]) => {
@@ -63,13 +99,12 @@ const checkReminders = () => {
       if (isToday(parsedDate)) {
         const age = new Date().getFullYear() - parsedDate.getFullYear();
         const ageText = age > 0 ? ` — виповнюється ${age} років!` : '';
-        bot.telegram.sendMessage(userId, `🎉 Сьогодні день народження: ${item.note || 'без нотатки'}${ageText}`);
+        bot.telegram.sendMessage(userId, `🎉 Сьогодні день народження: ${item.note || ''}${ageText}`);
       }
     });
   });
 };
 
-// перевірка кожен день о 9:00
 setInterval(checkReminders, 1000 * 60 * 60 * 24);
 
 bot.launch();
