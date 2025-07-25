@@ -1,184 +1,132 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
-const cron = require('node-cron');
 const fs = require('fs');
+const path = require('path');
+const cron = require('node-cron');
 const express = require('express');
-const { parse, format, isToday, differenceInYears } = require('date-fns');
+const addReminderScene = require('./addReminderScene');
+const editReminderScene = require('./editReminderScene');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
+const WEBHOOK_PATH = `/bot${process.env.BOT_TOKEN}`;
+const WEBHOOK_URL = `${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
 
 const dataDir = './userData';
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 
-const getUserFilePath = (userId) => `${dataDir}/${userId}.json`;
-
-const loadUserReminders = (userId) => {
-  const filePath = getUserFilePath(userId);
-  if (!fs.existsSync(filePath)) return [];
-  return JSON.parse(fs.readFileSync(filePath));
+const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
+const loadReminders = (userId) => {
+  const file = getUserFilePath(userId);
+  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : [];
+};
+const saveReminders = (userId, data) => {
+  fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
 };
 
-const saveUserReminders = (userId, data) => {
-  const filePath = getUserFilePath(userId);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-};
-
-const addReminderScene = new Scenes.WizardScene(
-  'addReminder',
-  (ctx) => {
-    try {
-      const prompts = [
-        '📅 Кидай дату народження! Наприклад: 12.02.1990 або 1 квітня 1985.',
-        '🎂 Напиши дату, тільки не «завтра» — я ж бот, не екстрасенс! 😄',
-        '🗓️ Дата народження, будь ласка! Можна як хочеш, я розберуся.',
-        '📆 Введи дату, поки не передумав вітати 😉',
-        '👶 Коли зʼявилась ця легенда на світ? Дай дату!'
-      ];
-      const message = prompts[Math.floor(Math.random() * prompts.length)];
-      ctx.reply(message);
-      ctx.wizard.state.reminder = {};
-      return ctx.wizard.next();
-    } catch (err) {
-      console.error('❌ Помилка на кроці 1 (дата):', err);
-      ctx.reply('⚠️ Щось пішло не так при введенні дати. Спробуй ще раз.');
-    }
-  },
-  (ctx) => {
-    try {
-      if (!ctx.message || !ctx.message.text) {
-        return ctx.reply('⚠️ Будь ласка, введи дату у вигляді тексту.');
-      }
-      const userInput = ctx.message.text.trim();
-      const dateVariants = [
-        'dd.MM.yyyy', 'd.MM.yyyy', 'dd.M.yyyy', 'd.M.yyyy',
-        'dd-MM-yyyy', 'd-MM-yyyy', 'dd-M-yyyy', 'd-M-yyyy',
-        'dd/MM/yyyy', 'd/MM/yyyy', 'dd/M/yyyy', 'd/M/yyyy',
-        'dd.MM.yy', 'd.MM.yy', 'dd.M.yy', 'd.M.yy',
-        'dd-MM-yy', 'd-MM-yy', 'dd-M-yy', 'd-M-yy',
-        'dd/MM/yy', 'd/MM/yy', 'dd/M/yy', 'd/M/yy',
-        "dd MMMM yyyy", "dd MMMM yy", "d MMMM yyyy", "d MMMM yy",
-        "ddMMMM yyyy", "ddMMMMyy", "dMMMM yyyy", "dMMMMyy"
-      ];
-      let parsedDate;
-      for (const formatStr of dateVariants) {
-        try {
-          parsedDate = parse(userInput, formatStr, new Date());
-          if (!isNaN(parsedDate)) break;
-        } catch {}
-      }
-      if (!parsedDate || isNaN(parsedDate)) {
-        return ctx.reply('⚠️ Не вдалося розпізнати дату. Спробуй у форматі: 12.02.1990, 2/12/95 або 02 грудня 1995.');
-      }
-
-      if (parsedDate.getFullYear() < 100) {
-        const year = parsedDate.getFullYear();
-        const currentYear = new Date().getFullYear();
-        const yearCandidate = 2000 + year;
-        parsedDate.setFullYear(
-          yearCandidate <= currentYear ? yearCandidate : 1900 + year
-        );
-      }
-
-      const normalized = format(parsedDate, 'dd.MM.yyyy');
-      ctx.wizard.state.reminder.date = normalized;
-      ctx.reply('📝 Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
-      return ctx.wizard.next();
-    } catch (err) {
-      console.error('❌ Помилка на кроці 2 (нотатка):', err);
-      ctx.reply('⚠️ Щось пішло не так при введенні нотатки. Спробуй ще раз.');
-    }
-  },
-  (ctx) => {
-    try {
-      if (!ctx.message || !ctx.message.text) {
-        return ctx.reply('⚠️ Надішли текст нотатки або натисни "Пропустити".');
-      }
-      const note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
-      const userId = ctx.from.id;
-      const reminders = loadUserReminders(userId);
-      reminders.push({ date: ctx.wizard.state.reminder.date, note });
-      saveUserReminders(userId, reminders);
-      const messages = [
-        '✅ Нагадування збережено!',
-        '📅 Записав! Тепер не забудеш.',
-        '📓 Додано в мій список памʼяті!',
-        '🧠 Занотовано! Я вже запамʼятав.',
-        '🎯 Є контакт! Я нагадаю обовʼязково.'
-      ];
-      const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-      ctx.reply(randomMsg, Markup.keyboard([['📋 Список нагадувань', '➕ Додати нагадування']]).resize());
-      return ctx.scene.leave();
-    } catch (err) {
-      console.error('❌ Помилка на кроці 3 (збереження):', err);
-      ctx.reply('⚠️ Не вдалося зберегти нагадування. Спробуй ще раз.');
-    }
+function calculateAge(dateStr) {
+  const [day, month, yearRaw] = dateStr.split(/[./\-\s]+/);
+  let year = parseInt(yearRaw);
+  if (yearRaw.length === 2) {
+    const currentYear = new Date().getFullYear() % 100;
+    const century = year > currentYear ? 1900 : 2000;
+    year += century;
   }
-);
-
-cron.schedule('* * * * *', () => {
+  const birthDate = new Date(year, parseInt(month) - 1, parseInt(day));
   const today = new Date();
-  const todayStr = format(today, 'dd.MM');
-  const userFiles = fs.readdirSync(dataDir).filter((f) => f.endsWith('.json'));
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
+}
 
-  for (const file of userFiles) {
-    const userId = file.replace('.json', '');
-    const entries = loadUserReminders(userId);
+const messageTemplates = [
+  `🎉 Сьогодні важлива дата!\n📅 {date} — виповнюється {age} років!\n{note}`,
+  `🦄 Увага-увага! День народження на горизонті!\n🎂 {date} — {age} років!\n{note}`,
+  `🔔 Біп-боп! Святковий алерт!\n🗓 {date} — святкуємо {age} років!\n{note}`,
+  `🎈 Йо-хо-хо! Хтось сьогодні святкує!\n📆 {date} — {age} років на планеті!\n{note}`,
+  `👑 Королівське свято!\n📅 {date} — {age} років мудрості й чарівності!\n{note}`,
+  `🚀 Запускаємо феєрверки! Бо сьогодні особливий день!\n🗓 {date} — {age} років святкування!\n{note}`,
+  `🕺 Танці, шампанське і торт!\n📅 {date} — {age} років магії!\n{note}`,
+  `🌈 День, коли народилась легенда!\n📅 {date} — {age} років!\n{note}`,
+  `📣 Алло, всім увага!\n{date} — день народження!\n🎁 {age} років — круто ж як!\n{note}`
+];
 
-    entries.forEach((r) => {
-      if (r.date.slice(0, 5) === todayStr) {
-        const birthDate = new Date(r.date);
-        const age = Math.max(0, differenceInYears(today, birthDate));
-        const note = r.note || '';
-        const shortDate = format(birthDate, 'dd.MM');
-
-        const templates = [
-          `🎉 Сьогодні важлива дата!\n📅 {date} — виповнюється {age} років!\n{note}`,
-          `🦄 Увага-увага! День народження на горизонті!\n🎂 {date} — {age} років!\n{note}`,
-          `🔔 Біп-боп! Святковий алерт!\n🗓 {date} — святкуємо {age} років!\n{note}`,
-          `🎈 Йо-хо-хо! Хтось сьогодні святкує!\n📆 {date} — {age} років на планеті!\n{note}`,
-          `👑 Королівське свято!\n📅 {date} — {age} років мудрості й чарівності!\n{note}`,
-          `🚀 Запускаємо феєрверки! Бо сьогодні особливий день!\n🗓 {date} — {age} років святкування!\n{note}`,
-          `🕺 Танці, шампанське і торт!\n📅 {date} — {age} років магії!\n{note}`,
-          `🌈 День, коли народилась легенда!\n📅 {date} — {age} років!\n{note}`,
-          `📣 Алло, всім увага!\n{date} — день народження!\n🎁 {age} років — круто ж як!\n{note}`
-        ];
-
-        const template = templates[Math.floor(Math.random() * templates.length)];
-        const message = template
-          .replace('{date}', shortDate)
-          .replace('{age}', age)
-          .replace('{note}', note);
-
-        bot.telegram.sendMessage(userId, message);
-      }
-    });
-  }
-});
-
-const stage = new Scenes.Stage([addReminderScene]);
+const stage = new Scenes.Stage([addReminderScene, editReminderScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
 bot.start((ctx) => {
   ctx.reply(
-    '👋 Привіт! Я тут, щоб зміцнити твій соціальний рейтинг.\nБо з кожним забутим ДН твоя репутація йде на дно. А я не дозволю цьому статись.\n\n➕ Додати нагадування\n📋 Список нагадувань',
-    Markup.keyboard([['➕ Додати нагадування', '📋 Список нагадувань']]).resize()
+    '👋 Привіт! Я тут, щоб підняти твій соц. рейтинг і вберегти від факапів з днями народження.\n\n➕ Додати нагадування\n📋 Список нагадувань',
+    Markup.keyboard(['➕ Додати нагадування', '📋 Список нагадувань']).resize()
   );
 });
 
-
-bot.command('add', (ctx) => ctx.scene.enter('addReminder'));
 bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 
-const WEBHOOK_PATH = `/bot${process.env.BOT_TOKEN}`;
-const WEBHOOK_URL = `${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
+bot.hears('📋 Список нагадувань', (ctx) => {
+  const reminders = loadReminders(ctx.from.id);
+  if (!reminders.length) return ctx.reply('😶 У тебе ще нема жодного нагадування.');
+
+  reminders.forEach((r, index) => {
+    const [day, month] = r.date.split(/[./\-\s]+/);
+    ctx.reply(
+      `📌 ${r.note || '(без нотатки)'}\n📅 ${day.padStart(2, '0')}.${month.padStart(2, '0')}`,
+      Markup.inlineKeyboard([
+        [
+          Markup.button.callback('✏️ Змінити', `edit_${index}`),
+          Markup.button.callback('🗑 Видалити', `delete_${index}`)
+        ]
+      ])
+    );
+  });
+});
+
+bot.action(/edit_(\d+)/, (ctx) => {
+  ctx.session.editingIndex = Number(ctx.match[1]);
+  ctx.answerCbQuery();
+  ctx.scene.enter('editReminder');
+});
+
+bot.action(/delete_(\d+)/, (ctx) => {
+  const index = Number(ctx.match[1]);
+  const reminders = loadReminders(ctx.from.id);
+  if (!reminders[index]) return ctx.answerCbQuery('⚠️ Нагадування не знайдено');
+  reminders.splice(index, 1);
+  saveReminders(ctx.from.id, reminders);
+  ctx.answerCbQuery('🗑 Видалено!');
+  ctx.editMessageText('🗑 Нагадування видалено');
+});
+
+cron.schedule('* * * * *', () => {
+  const today = new Date();
+  const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const users = fs.readdirSync(dataDir).filter((file) => file.endsWith('.json'));
+
+  users.forEach((userFile) => {
+    const userId = userFile.replace('.json', '');
+    const reminders = loadReminders(userId);
+    reminders.forEach((r) => {
+      if (!r.date) return;
+      const [day, month] = r.date.split(/[./\-\s]+/);
+      const dateStr = `${day.padStart(2, '0')}-${month.padStart(2, '0')}`;
+      if (dateStr === todayStr) {
+        const age = calculateAge(r.date);
+        const note = r.note?.trim() || '';
+        const dateForMessage = `${day.padStart(2, '0')}.${month.padStart(2, '0')}`;
+        const template = messageTemplates[Math.floor(Math.random() * messageTemplates.length)];
+        const msg = template
+          .replace('{date}', dateForMessage)
+          .replace('{age}', age)
+          .replace('{note}', note);
+        bot.telegram.sendMessage(userId, msg);
+      }
+    });
+  });
+});
+
 bot.telegram.setWebhook(WEBHOOK_URL);
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => {
-  res.send('SayHBD bot is running 🎉');
-});
-app.listen(PORT, () => {
-  console.log(`✅ Server is listening on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
