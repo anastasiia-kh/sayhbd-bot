@@ -170,5 +170,3 @@ app.listen(PORT, () => {
 if (process.env.RENDER_EXTERNAL_URL) {
   bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/webhook`);
 }
-
-bot.launch();
