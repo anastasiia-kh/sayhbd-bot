@@ -3,6 +3,8 @@ const cron = require('node-cron');
 const fs = require('fs');
 const express = require('express');
 const { parse, format, isToday, differenceInYears } = require('date-fns');
+const { uk } = require('date-fns/locale');
+
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const remindersFile = '/tmp/reminders.json';
@@ -39,7 +41,35 @@ const addReminderScene = new Scenes.WizardScene(
       if (!ctx.message || !ctx.message.text) {
         return ctx.reply('⚠️ Будь ласка, введи дату у вигляді тексту.');
       }
-      ctx.wizard.state.reminder.date = ctx.message.text;
+      let userInput = ctx.message.text.trim();
+        userInput = userInput.replace(/(\d)([а-яА-Я])/g, '$1 $2');
+
+
+      const dateVariants = [
+        'dd.MM.yyyy', 'd.MM.yyyy', 'dd.M.yyyy', 'd.M.yyyy',
+        'dd-MM-yyyy', 'd-MM-yyyy', 'dd-M-yyyy', 'd-M-yyyy',
+        'dd/MM/yyyy', 'd/MM/yyyy', 'dd/M/yyyy', 'd/M/yyyy',
+        'dd.MM.yy', 'd.MM.yy', 'dd.M.yy', 'd.M.yy',
+        'dd-MM-yy', 'd-MM-yy', 'dd-M-yy', 'd-M-yy',
+        'dd/MM/yy', 'd/MM/yy', 'dd/M/yy', 'd/M/yy',
+        "dd MMMM yyyy", "dd MMMM yy", "d MMMM yyyy", "d MMMM yy",
+        "ddMMMM yyyy", "ddMMMMyy", "dMMMM yyyy", "dMMMMyy"
+      ];
+
+      let parsedDate;
+      for (const formatStr of dateVariants) {
+        try {
+          parsedDate = parse(userInput, formatStr, new Date(), { locale: uk });
+          if (!isNaN(parsedDate)) break;
+        } catch {}
+      }
+
+      if (!parsedDate || isNaN(parsedDate)) {
+        return ctx.reply('⚠️ Не вдалося розпізнати дату. Спробуй у форматі: 12.02.1990, 2/12/95 або 02 грудня 1995.');
+      }
+
+      const normalized = format(parsedDate, 'dd.MM.yyyy');
+      ctx.wizard.state.reminder.date = normalized;
       ctx.reply('📝 Введіть нотатку або натисніть "Пропустити"', Markup.keyboard(['Пропустити']).oneTime().resize());
       return ctx.wizard.next();
     } catch (err) {
@@ -134,7 +164,6 @@ ${reminder.note ? '📝 ' + reminder.note : ''}`;
   });
 });
 
-
 const app = express();
 app.use(express.json());
 app.use(bot.webhookCallback('/webhook'));
@@ -143,5 +172,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Сервер слухає порт ${PORT}`);
 });
+
+bot.telegram.setWebhook(`https://${process.env.RENDER_EXTERNAL_URL}/webhook`);
 
 bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}/webhook`);
