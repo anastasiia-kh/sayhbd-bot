@@ -3,6 +3,8 @@ const cron = require('node-cron');
 const fs = require('fs');
 const express = require('express');
 const { parse, format, isToday, differenceInYears } = require('date-fns');
+const { loadUserReminders, saveUserReminders } = require('./userStorage');
+
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
@@ -85,11 +87,11 @@ const addReminderScene = new Scenes.WizardScene(
         return ctx.reply('⚠️ Надішли текст нотатки або натисни "Пропустити".');
       }
       const note = ctx.message.text === 'Пропустити' ? '' : ctx.message.text;
-      const reminders = loadReminders();
+     const reminders = loadUserReminders(userId);
       const userId = ctx.from.id;
       if (!reminders[userId]) reminders[userId] = [];
       reminders[userId].push({ date: ctx.wizard.state.reminder.date, note });
-      saveReminders(reminders);
+      saveUserReminders(userId, reminders);
       const messages = [
         '✅ Нагадування збережено!',
         '📅 Записав! Тепер не забудеш.',
