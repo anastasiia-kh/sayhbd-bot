@@ -205,5 +205,12 @@ cron.schedule('*/2 * * * *', () => {
   checkReminders();
 });
 
-bot.launch();
-console.log('Бот запущено');
+(async () => {
+  try {
+    await bot.launch();
+    console.log('✅ Бот успішно запущено');
+  } catch (err) {
+    console.error('❌ Бот не запущено. Можливо, вже працює інша копія:', err.message);
+  }
+})();
+
