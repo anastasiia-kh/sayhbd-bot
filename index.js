@@ -57,6 +57,7 @@ ctx.reply(randomMsg, Markup.removeKeyboard());
 );
 
 const stage = new Scenes.Stage([addReminderScene]);
+bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 bot.use(session());
 bot.use(stage.middleware());
 
