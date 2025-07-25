@@ -8,9 +8,8 @@ const remindersFile = '/tmp/reminders.json';
 // Автоматичне створення reminders.json, якщо його не існує
 if (!fs.existsSync(remindersFile)) {
   fs.writeFileSync(remindersFile, '{}');
-}');
-}');
 }
+
 
 const loadReminders = () => JSON.parse(fs.existsSync(remindersFile) ? fs.readFileSync(remindersFile) : '{}');
 const saveReminders = (data) => fs.writeFileSync(remindersFile, JSON.stringify(data, null, 2));
