@@ -13,12 +13,17 @@ const loadReminders = (userId) =>
 const saveReminders = (userId, data) =>
   fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
 
+
+const { loadUserReminders, saveUserReminders } = require('./userStorage');
+
 const editReminder = new Scenes.BaseScene('editReminder');
 
 editReminder.enter((ctx) => {
+  const userId = ctx.from.id;
   const { editId, allReminders } = ctx.scene.state || {};
   console.log('editId:', editId);
   console.log('allReminders:', allReminders);
+
   const reminder = allReminders.find(r => r.id === editId);
 
   if (!reminder) {
@@ -28,6 +33,7 @@ editReminder.enter((ctx) => {
 
   ctx.scene.state.current = reminder;
   ctx.scene.state.selected = new Set(reminder.remindBefore || []);
+  
 
   ctx.reply(
     `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nОберіть, коли нагадати:`,
