@@ -1,9 +1,9 @@
 const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
-
-const dataDir = './userData';
+const dataDir = path.join(__dirname, 'data');
 const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
+
 
 const loadReminders = (userId) =>
   fs.existsSync(getUserFilePath(userId))
