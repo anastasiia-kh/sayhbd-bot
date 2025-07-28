@@ -134,29 +134,31 @@ const addReminder = new Scenes.WizardScene(
     }
 
     if (data === 'done') {
-      if (!state.remindBefore.length) {
-        return ctx.answerCbQuery('⚠️ Обери хоча б один варіант!');
-      }
+  if (!state.remindBefore.length) {
+    return ctx.answerCbQuery('⚠️ Обери хоча б один варіант!');
+  }
 
-      const reminders = loadUserReminders(ctx.from.id);
+  const reminders = loadUserReminders(ctx.from.id);
 
-      const newReminder = {
-        id: uuidv4(),
-        date: state.date,
-        note: state.note || '',
-        remindBefore: [...state.remindBefore].sort((a,b) => a-b)
-      };
+  const newReminder = {
+    id: uuidv4(),
+    date: state.date,
+    note: state.note || '',
+    remindBefore: [...state.remindBefore].sort((a,b) => a-b)
+  };
 
-      reminders.push(newReminder);
-      saveUserReminders(ctx.from.id, reminders);
+  reminders.push(newReminder);
+  console.log('Reminders перед збереженням (addReminder):', reminders);
+  saveUserReminders(ctx.from.id, reminders);
 
-      console.log('Додано нове нагадування:', newReminder);
+  console.log('Додано нове нагадування:', newReminder);
 
-      ctx.wizard.state = {}; // очищаємо стан
+  ctx.wizard.state = {}; // очищаємо стан
 
-      await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
-      return ctx.scene.leave();
-    }
+  await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
+  return ctx.scene.leave();
+}
+
   }
 );
 

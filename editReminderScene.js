@@ -2,16 +2,33 @@ const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = './data'; // Папка з даними
+const dataDir = path.join(__dirname, 'data'); // Абсолютний шлях до папки data
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
 const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
 
-const loadUserReminders = (userId) =>
-  fs.existsSync(getUserFilePath(userId))
-    ? JSON.parse(fs.readFileSync(getUserFilePath(userId)))
-    : [];
+function loadUserReminders(userId) {
+  try {
+    const filePath = getUserFilePath(userId);
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Error reading reminders for user', userId, e);
+  }
+  return [];
+}
 
-const saveUserReminders = (userId, data) =>
-  fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
+function saveUserReminders(userId, data) {
+  try {
+    fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('Error saving reminders for user', userId, e);
+  }
+}
 
 const reminderOptions = [
   { label: 'У день події', value: 0 },
@@ -34,17 +51,17 @@ editReminder.enter(async (ctx) => {
 
   ctx.scene.state.reminder = { ...reminder };
   ctx.scene.state.selectedRemindBefore = new Set(reminder.remindBefore || []);
-  ctx.scene.state.editStep = 'menu'; // поточний крок
+  ctx.scene.state.editStep = 'menu'; // початковий крок меню
+  ctx.scene.state.remindersList = reminders; // збережемо весь список для збереження
 
   await showMainMenu(ctx);
 });
 
 editReminder.on('text', async (ctx) => {
   const step = ctx.scene.state.editStep;
+  const text = ctx.message.text;
 
   if (step === 'menu') {
-    const text = ctx.message.text;
-
     if (text === '🗓 Змінити дату') {
       ctx.scene.state.editStep = 'editDate';
       await ctx.reply(
@@ -65,7 +82,7 @@ editReminder.on('text', async (ctx) => {
 
     if (text === '⏰ Змінити час сповіщень') {
       ctx.scene.state.editStep = 'editRemindBefore';
-      await ctx.reply('Вибери, коли надіслати нагадування (можна декілька):');
+      await ctx.reply('Вибери, коли надіслати нагадування (натискай кнопки):');
       await showRemindBeforeButtons(ctx);
       return;
     }
@@ -76,16 +93,14 @@ editReminder.on('text', async (ctx) => {
     }
 
     await ctx.reply('⚠️ Обери дію з меню.');
-  } else if (step === 'editDate') {
-    const text = ctx.message.text;
+  } 
+  else if (step === 'editDate') {
     if (text === '/cancel') {
       ctx.scene.state.editStep = 'menu';
       await ctx.reply('Редагування дати скасовано.', Markup.removeKeyboard());
-      await showMainMenu(ctx);
-      return;
+      return showMainMenu(ctx);
     }
 
-    // Валідація дати
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
     if (!dateRegex.test(text)) {
       return ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
@@ -99,38 +114,38 @@ editReminder.on('text', async (ctx) => {
 
     ctx.scene.state.reminder.date = text;
     ctx.scene.state.editStep = 'afterEdit';
-    ctx.scene.state.lastEditType = 'date';
+    ctx.scene.state.reminder.dateEdited = true;
 
     await ctx.reply(
       `Дата змінена на: ${text}`,
       Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
     );
-  } else if (step === 'editNote') {
-    const text = ctx.message.text;
+  } 
+  else if (step === 'editNote') {
     if (text === '/cancel') {
       ctx.scene.state.editStep = 'menu';
       await ctx.reply('Редагування нотатки скасовано.', Markup.removeKeyboard());
-      await showMainMenu(ctx);
-      return;
+      return showMainMenu(ctx);
     }
 
-    ctx.scene.state.reminder.note = text;
+    ctx.scene.state.reminder.note = text || '';
     ctx.scene.state.editStep = 'afterEdit';
-    ctx.scene.state.lastEditType = 'note';
+    ctx.scene.state.reminder.noteEdited = true;
 
     await ctx.reply(
-      `Нотатку змінено на: ${text || '(порожня)'}`,
+      `Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`,
       Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
     );
-  } else if (step === 'afterEdit') {
-    // Обробляємо кнопки повернення після редагування
-    if (ctx.message.text === '↩️ Повернутись в меню редагування') {
+  } 
+  else if (step === 'afterEdit') {
+    if (text === '↩️ Повернутись в меню редагування') {
       ctx.scene.state.editStep = 'menu';
-      await showMainMenu(ctx);
-    } else if (ctx.message.text === '🏠 Головне меню') {
-      // Збереження перед виходом
+      return showMainMenu(ctx);
+    } else if (text === '🏠 Головне меню') {
       await saveChanges(ctx);
       return ctx.scene.leave();
+    } else {
+      await ctx.reply('⚠️ Використовуй кнопки меню.');
     }
   }
 });
@@ -155,8 +170,6 @@ editReminder.on('callback_query', async (ctx) => {
     else selected.add(day);
 
     await ctx.answerCbQuery();
-
-    // Оновити інлайн кнопки
     await showRemindBeforeButtons(ctx);
     return;
   }
@@ -165,7 +178,6 @@ editReminder.on('callback_query', async (ctx) => {
     ctx.scene.state.reminder.remindBefore = Array.from(selected).sort((a, b) => a - b);
     ctx.scene.state.editStep = 'afterEdit';
     await ctx.answerCbQuery('Нагадування оновлено.');
-
     await ctx.reply('Нагадування оновлено.', Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize());
     return;
   }
@@ -180,9 +192,9 @@ editReminder.on('callback_query', async (ctx) => {
 async function showMainMenu(ctx) {
   const reminder = ctx.scene.state.reminder;
   const buttons = [
-    '🗓 Змінити дату',
-    '📝 Змінити нотатку',
-    '⏰ Змінити час сповіщень',
+    `🗓 Змінити дату${reminder.dateEdited ? ' ✔️' : ''}`,
+    `📝 Змінити нотатку${reminder.noteEdited ? ' ✔️' : ''}`,
+    `⏰ Змінити час сповіщень${reminder.remindBeforeEdited ? ' ✔️' : ''}`,
     '❌ Вийти без збереження',
   ];
 
@@ -211,7 +223,7 @@ async function showRemindBeforeButtons(ctx) {
 
 async function saveChanges(ctx) {
   const userId = ctx.from.id;
-  const reminders = loadUserReminders(userId);
+  const reminders = ctx.scene.state.remindersList;
   const reminderIndex = reminders.findIndex(r => r.id === ctx.scene.state.editId);
 
   if (reminderIndex === -1) {
