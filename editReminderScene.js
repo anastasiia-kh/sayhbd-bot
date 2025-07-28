@@ -30,21 +30,6 @@ function saveUserReminders(userId, data) {
   }
 }
 
-// Функція для видалення зайвих повідомлень (користувача і попереднього з помилкою)
-async function cleanupMessages(ctx) {
-  try {
-    if (ctx.message && ctx.message.message_id) {
-      await ctx.deleteMessage(ctx.message.message_id);
-    }
-    // Спроба видалити попереднє повідомлення (якщо є)
-    if (ctx.message && ctx.message.message_id) {
-      await ctx.deleteMessage(ctx.message.message_id - 1);
-    }
-  } catch {
-    // Ігноруємо помилки видалення
-  }
-}
-
 const reminderOptions = [
   { label: 'У день події', value: 0 },
   { label: 'За 1 день', value: 1 },
@@ -53,6 +38,15 @@ const reminderOptions = [
 ];
 
 const editReminder = new Scenes.BaseScene('editReminder');
+
+// Універсальна функція для обробки скасування дії
+async function handleCancel(ctx) {
+  await ctx.reply(
+    '❌ Дія скасована. Немає про що турбуватись.',
+    Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+  );
+  ctx.scene.state.editStep = 'afterEdit'; // Переходимо в стан після редагування
+}
 
 editReminder.enter(async (ctx) => {
   const reminders = ctx.scene.state.allReminders || loadUserReminders(ctx.from.id);
@@ -75,6 +69,11 @@ editReminder.enter(async (ctx) => {
 editReminder.on('text', async (ctx) => {
   const step = ctx.scene.state.editStep;
   const text = ctx.message.text;
+
+  // Обробка скасування в будь-який момент
+  if (text === '❌ Скасувати' || text === '/cancel') {
+    return handleCancel(ctx);
+  }
 
   if (step === 'menu') {
     if (text === '🗓 Змінити дату') {
@@ -111,17 +110,9 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  else if (step === 'editDate') {
-    if (text === '/cancel') {
-      await cleanupMessages(ctx);
-      ctx.scene.state.editStep = 'menu';
-      await showMainMenu(ctx);
-      return;
-    }
-
+  if (step === 'editDate') {
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
     if (!dateRegex.test(text)) {
-      await cleanupMessages(ctx);
       await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
       return;
     }
@@ -143,14 +134,7 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  else if (step === 'editNote') {
-    if (text === '/cancel') {
-      await cleanupMessages(ctx);
-      ctx.scene.state.editStep = 'menu';
-      await showMainMenu(ctx);
-      return;
-    }
-
+  if (step === 'editNote') {
     ctx.scene.state.reminder.note = text || '';
     ctx.scene.state.editStep = 'afterEdit';
     ctx.scene.state.reminder.noteEdited = true;
@@ -162,7 +146,7 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  else if (step === 'afterEdit') {
+  if (step === 'afterEdit') {
     if (text === '↩️ Повернутись в меню редагування') {
       ctx.scene.state.editStep = 'menu';
       await showMainMenu(ctx);
@@ -188,7 +172,10 @@ editReminder.on('callback_query', async (ctx) => {
   if (data === 'skip_remind') {
     selected.clear();
     await ctx.answerCbQuery('Нагадування пропущено');
-    await ctx.reply('Нагадування пропущено.', Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize());
+    await ctx.reply(
+      'Нагадування пропущено.',
+      Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+    );
     ctx.scene.state.editStep = 'afterEdit';
     return;
   }
@@ -208,7 +195,10 @@ editReminder.on('callback_query', async (ctx) => {
     ctx.scene.state.remindBeforeEdited = true;
     ctx.scene.state.editStep = 'afterEdit';
     await ctx.answerCbQuery('Нагадування оновлено.');
-    await ctx.reply('Нагадування оновлено.', Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize());
+    await ctx.reply(
+      'Нагадування оновлено.',
+      Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+    );
     return;
   }
 
@@ -281,10 +271,10 @@ async function saveChanges(ctx) {
   reminders[reminderIndex] = ctx.scene.state.reminder;
   saveUserReminders(userId, reminders);
 
-  await ctx.reply('✅ Всі зміни збережено.', Markup.keyboard([
-    '↩️ Повернутись в меню редагування',
-    '🏠 Головне меню'
-  ]).resize());
+  await ctx.reply(
+    '✅ Всі зміни збережено.',
+    Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+  );
 }
 
 module.exports = editReminder;
