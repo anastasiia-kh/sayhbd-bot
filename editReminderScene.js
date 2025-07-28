@@ -2,8 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = path.join(__dirname, 'data');  // same 'data' folder
-
+const dataDir = './userData';
 const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
 
 const loadReminders = (userId) =>
@@ -17,12 +16,9 @@ const saveReminders = (userId, data) =>
 const editReminder = new Scenes.BaseScene('editReminder');
 
 editReminder.enter((ctx) => {
-  const userId = ctx.from.id;
-  const reminders = ctx.scene.state.allReminders || loadReminders(userId);
-  const editId = ctx.scene.state.editId;          // тепер зберігаємо id
-
+  const { editId, allReminders } = ctx.scene.state || {};
   console.log('editId:', editId);
-console.log('allReminders:', reminders);
+  console.log('allReminders:', allReminders);
   const reminder = reminders.find(r => r.id === editId);  // шукаємо по id
 
   if (!reminder) {
