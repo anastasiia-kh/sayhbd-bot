@@ -1,6 +1,18 @@
 const { Scenes, Markup } = require('telegraf');
 const { loadUserReminders, saveUserReminders } = require('./userStorage');
 
+const { v4: uuidv4 } = require('uuid');
+// ...
+
+// При додаванні нового нагадування:
+reminders.push({
+  id: uuidv4(),
+  date: state.date,
+  note: state.note,
+  remindBefore: state.remindBefore.sort((a, b) => a - b)
+});
+
+
 const mainMenuKeyboard = Markup.keyboard([
   ['➕ Додати нагадування'],
   ['📋 Список нагадувань'],

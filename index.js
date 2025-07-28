@@ -65,24 +65,29 @@ bot.start((ctx) => {
 
 bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 
+const { v4: uuidv4 } = require('uuid'); // у верхній частині файлу
+
 bot.hears('📋 Список нагадувань', (ctx) => {
   const reminders = loadUserReminders(ctx.from.id);
   if (!reminders.length) {
     return ctx.reply('Наразі у тебе немає жодного нагадування.');
   }
 
-  reminders.forEach((r, i) => {
+  reminders.forEach((r) => {
     const remindText = r.remindBefore?.length
       ? `⏱ [${r.remindBefore.join(', ')} дн.]`
       : '';
-    const text = `#${i + 1} — ${r.date}${r.note ? ` — ${r.note}` : ''} ${remindText}`;
+    const text = `${r.date}${r.note ? ` — ${r.note}` : ''} ${remindText}`;
+
+    // Якщо нагадування не має id — додамо (можна також додати при створенні)
+    if (!r.id) r.id = uuidv4();
 
     ctx.reply(text, {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '✏️ Редагувати', callback_data: `edit_${i}` },
-            { text: '🗑 Видалити', callback_data: `delete_${i}` }
+            { text: '✏️ Редагувати', callback_data: `edit_${r.id}` },
+            { text: '🗑 Видалити', callback_data: `delete_${r.id}` }
           ]
         ]
       }
@@ -90,38 +95,39 @@ bot.hears('📋 Список нагадувань', (ctx) => {
   });
 });
 
+
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
   const userId = ctx.from.id;
   const reminders = loadUserReminders(userId);
 
-if (data.startsWith('edit_')) {
-  const index = parseInt(data.split('_')[1]);
-  const currentReminders = loadUserReminders(userId);
+  if (data.startsWith('edit_')) {
+    const id = data.split('_')[1];
+    const reminderIndex = reminders.findIndex(r => r.id === id);
 
-  if (currentReminders.length > index) {
-    ctx.scene.state = {
-      editIndex: index,
-      allReminders: currentReminders
-    };
-    return ctx.scene.enter('editReminder');
-  } else {
-    return ctx.reply('⚠️ Це нагадування вже не існує.');
+    if (reminderIndex !== -1) {
+      ctx.scene.state = {
+        editIndex: reminderIndex,
+        allReminders: reminders
+      };
+      return ctx.scene.enter('editReminder');
+    } else {
+      return ctx.reply('⚠️ Це нагадування вже не існує.');
+    }
   }
-}
-
 
   if (data.startsWith('delete_')) {
-  const index = parseInt(data.split('_')[1]);
-  if (reminders.length > index) {
-    reminders.splice(index, 1);
-    saveUserReminders(userId, reminders);
-    return ctx.editMessageText('🗑 Нагадування видалено.');
-  } else {
-    return ctx.reply('⚠️ Нагадування не знайдено.');
-  }
-}
+    const id = data.split('_')[1];
+    const reminderIndex = reminders.findIndex(r => r.id === id);
 
+    if (reminderIndex !== -1) {
+      reminders.splice(reminderIndex, 1);
+      saveUserReminders(userId, reminders);
+      return ctx.editMessageText('🗑 Нагадування видалено.');
+    } else {
+      return ctx.reply('⚠️ Нагадування не знайдено.');
+    }
+  }
 });
 
 
