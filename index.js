@@ -94,16 +94,21 @@ bot.on('callback_query', async (ctx) => {
   const userId = ctx.from.id;
   const reminders = loadUserReminders(userId);
 
-  if (data.startsWith('edit_')) {
+if (data.startsWith('edit_')) {
   const index = parseInt(data.split('_')[1]);
-  if (reminders[index]) {
+  const currentReminders = loadUserReminders(userId);
+
+  if (currentReminders.length > index) {
     ctx.scene.state = {
       editIndex: index,
-      allReminders: reminders // нове
+      allReminders: currentReminders
     };
     return ctx.scene.enter('editReminder');
+  } else {
+    return ctx.reply('⚠️ Це нагадування вже не існує.');
   }
 }
+
 
   if (data.startsWith('delete_')) {
     const index = parseInt(data.split('_')[1]);
