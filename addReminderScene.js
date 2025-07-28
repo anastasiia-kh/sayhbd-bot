@@ -1,16 +1,6 @@
 const { Scenes, Markup } = require('telegraf');
-const { v4: uuidv4 } = require('uuid');  // для генерації id
+const { v4: uuidv4 } = require('uuid');
 const { loadUserReminders, saveUserReminders } = require('./userStorage');
-// ...
-
-// При додаванні нового нагадування:
-reminders.push({
-  id: uuidv4(),
-  date: state.date,
-  note: state.note,
-  remindBefore: state.remindBefore.sort((a, b) => a - b)
-});
-
 
 const mainMenuKeyboard = Markup.keyboard([
   ['➕ Додати нагадування'],
@@ -29,7 +19,7 @@ const addReminder = new Scenes.WizardScene(
   'addReminder',
 
   async (ctx) => {
-    ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95', {
+    await ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95', {
       reply_markup: {
         remove_keyboard: true
       }
@@ -70,24 +60,23 @@ const addReminder = new Scenes.WizardScene(
 
     ctx.wizard.state.date = rawDate;
     await ctx.reply(
-  '📝 Введи нотатку (імʼя, подія, тощо)',
-  Markup.inlineKeyboard([
-    [Markup.button.callback('⏭ Пропустити', 'skip_note')]
-  ])
-);
-return ctx.wizard.next();
-
+      '📝 Введи нотатку (імʼя, подія, тощо)',
+      Markup.inlineKeyboard([
+        [Markup.button.callback('⏭ Пропустити', 'skip_note')]
+      ])
+    );
+    return ctx.wizard.next();
   },
 
   async (ctx) => {
     if (ctx.callbackQuery?.data === 'skip_note') {
-  ctx.wizard.state.note = '';
-  await ctx.answerCbQuery('⏭ Нотатку пропущено');
-} else if (ctx.message?.text) {
-  ctx.wizard.state.note = ctx.message.text.trim();
-} else {
-  return ctx.reply('⚠️ Надішли нотатку текстом або натисни “Пропустити”.');
-}
+      ctx.wizard.state.note = '';
+      await ctx.answerCbQuery('⏭ Нотатку пропущено');
+    } else if (ctx.message?.text) {
+      ctx.wizard.state.note = ctx.message.text.trim();
+    } else {
+      return ctx.reply('⚠️ Надішли нотатку текстом або натисни “Пропустити”.');
+    }
 
     ctx.wizard.state.remindBefore = [];
 
@@ -95,7 +84,7 @@ return ctx.wizard.next();
       Markup.button.callback(opt.label, `toggle_${opt.value}`)
     );
 
-    ctx.reply(
+    await ctx.reply(
       '🕐 Коли надіслати нагадування? Обери один або кілька варіантів:',
       Markup.inlineKeyboard([
         [buttons[0], buttons[1]],
@@ -122,11 +111,12 @@ return ctx.wizard.next();
         state.remindBefore.splice(idx, 1);
       }
 
-      ctx.answerCbQuery(
+      await ctx.answerCbQuery(
         state.remindBefore.includes(value)
           ? `✅ Додано: ${value === 0 ? 'У день події' : `За ${value} днів`}`
           : `❌ Видалено: ${value === 0 ? 'У день події' : `За ${value} днів`}`
       );
+      return;
     }
 
     if (data === 'done') {
@@ -134,16 +124,19 @@ return ctx.wizard.next();
         return ctx.answerCbQuery('⚠️ Обери хоча б один варіант!');
       }
 
+      // Завантажуємо поточні нагадування
       const reminders = loadUserReminders(ctx.from.id);
 
-reminders.push({
-  id: uuidv4(),
-  date: ctx.wizard.state.date,
-  note: ctx.wizard.state.note,
-  remindBefore: ctx.wizard.state.remindBefore.sort((a, b) => a - b)
-});
+      // Додаємо нове з унікальним id
+      reminders.push({
+        id: uuidv4(),
+        date: state.date,
+        note: state.note,
+        remindBefore: state.remindBefore.sort((a, b) => a - b)
+      });
 
-saveUserReminders(ctx.from.id, reminders);
+      // Зберігаємо оновлений список
+      saveUserReminders(ctx.from.id, reminders);
 
       await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
       return ctx.scene.leave();
