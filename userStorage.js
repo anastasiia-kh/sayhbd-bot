@@ -1,12 +1,11 @@
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 
-const storageDir = path.join(__dirname, 'data');
+const storageDir = path.join(__dirname, 'data');  // Вказати саме 'data'
 
-// Перевіряємо, чи існує папка 'data', якщо ні — створюємо
 if (!fs.existsSync(storageDir)) {
   fs.mkdirSync(storageDir, { recursive: true });
-  console.log('Папка "data" була створена автоматично');
+  console.log('Папка "data" створена');
 } else {
   console.log('Папка "data" існує');
 }
@@ -32,7 +31,6 @@ function saveUserReminders(userId, reminders) {
   const file = getUserFilePath(userId);
   try {
     fs.writeFileSync(file, JSON.stringify(reminders, null, 2), 'utf-8');
-    console.log(`✅ Нагадування успішно збережено у файл: ${file}`);
   } catch (err) {
     console.error(`❌ Помилка запису у ${file}:`, err.message);
   }
