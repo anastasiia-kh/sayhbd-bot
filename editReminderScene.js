@@ -191,8 +191,17 @@ const editReminder = new Scenes.WizardScene(
   }
 );
 
-// Функція для відображення меню редагування з позначками ✔️
+// Оновлена функція показу меню з видаленням попередніх повідомлень
 async function showEditMenu(ctx) {
+  // Видаляємо попереднє меню, якщо це callbackQuery
+  if (ctx.callbackQuery) {
+    try {
+      await ctx.deleteMessage();
+    } catch (e) {
+      // Помилку ігноруємо (наприклад, повідомлення вже видалене)
+    }
+  }
+
   const editing = ctx.scene.state.editing;
   const reminder = ctx.scene.state.reminder;
 
@@ -211,22 +220,25 @@ async function showEditMenu(ctx) {
   );
 }
 
-// Функція для показу кнопок remindBefore
 async function showRemindBeforeButtons(ctx) {
   const selected = ctx.scene.state.selectedRemindBefore;
 
   if (ctx.callbackQuery) {
-    await ctx.editMessageText(
-      `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
-      Markup.inlineKeyboard([
-        [0,1,3,7].map(d => Markup.button.callback(selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)),
-        [
-          Markup.button.callback('❎ Пропустити', 'skip_remind'),
-          Markup.button.callback('💾 Зберегти', 'save_edit'),
-          Markup.button.callback('❌ Скасувати', 'cancel_edit')
-        ]
-      ])
-    );
+    try {
+      await ctx.editMessageText(
+        `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
+        Markup.inlineKeyboard([
+          [0,1,3,7].map(d => Markup.button.callback(selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)),
+          [
+            Markup.button.callback('❎ Пропустити', 'skip_remind'),
+            Markup.button.callback('💾 Зберегти', 'save_edit'),
+            Markup.button.callback('❌ Скасувати', 'cancel_edit')
+          ]
+        ])
+      );
+    } catch (e) {
+      // Якщо редагування повідомлення не вдалося — ігноруємо
+    }
   } else {
     await ctx.reply(
       `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
@@ -242,7 +254,6 @@ async function showRemindBeforeButtons(ctx) {
   }
 }
 
-// Функція для підтвердження збереження змін
 async function askSaveConfirm(ctx) {
   await ctx.reply(
     'Впевнений, що хочеш зберегти всі зміни?',
@@ -253,7 +264,6 @@ async function askSaveConfirm(ctx) {
   );
 }
 
-// Функція для збереження змін
 async function saveChanges(ctx) {
   const userId = ctx.from.id;
   const reminders = loadReminders(userId);
