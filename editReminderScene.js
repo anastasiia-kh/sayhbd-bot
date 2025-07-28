@@ -1,5 +1,49 @@
 const { Scenes, Markup } = require('telegraf');
-const { loadUserReminders, saveUserReminders } = require('./userStorage');
+const fs = require('fs');
+const path = require('path');
+
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
+
+function loadUserReminders(userId) {
+  try {
+    const filePath = getUserFilePath(userId);
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Error reading reminders for user', userId, e);
+  }
+  return [];
+}
+
+function saveUserReminders(userId, data) {
+  try {
+    fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('Error saving reminders for user', userId, e);
+  }
+}
+
+// Функція для видалення зайвих повідомлень (користувача і попереднього з помилкою)
+async function cleanupMessages(ctx) {
+  try {
+    if (ctx.message && ctx.message.message_id) {
+      await ctx.deleteMessage(ctx.message.message_id);
+    }
+    // Спроба видалити попереднє повідомлення (якщо є)
+    if (ctx.message && ctx.message.message_id) {
+      await ctx.deleteMessage(ctx.message.message_id - 1);
+    }
+  } catch {
+    // Ігноруємо помилки видалення
+  }
+}
 
 const reminderOptions = [
   { label: 'У день події', value: 0 },
@@ -65,18 +109,19 @@ editReminder.on('text', async (ctx) => {
 
     await ctx.reply('⚠️ Обери дію з меню.');
     return;
-  } 
-  
+  }
+
   else if (step === 'editDate') {
     if (text === '/cancel') {
+      await cleanupMessages(ctx);
       ctx.scene.state.editStep = 'menu';
-      await ctx.reply('Редагування дати скасовано.');
       await showMainMenu(ctx);
       return;
     }
 
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
     if (!dateRegex.test(text)) {
+      await cleanupMessages(ctx);
       await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
       return;
     }
@@ -96,12 +141,12 @@ editReminder.on('text', async (ctx) => {
       Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
     );
     return;
-  } 
-  
+  }
+
   else if (step === 'editNote') {
     if (text === '/cancel') {
+      await cleanupMessages(ctx);
       ctx.scene.state.editStep = 'menu';
-      await ctx.reply('Редагування нотатки скасовано.');
       await showMainMenu(ctx);
       return;
     }
@@ -115,8 +160,8 @@ editReminder.on('text', async (ctx) => {
       Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
     );
     return;
-  } 
-  
+  }
+
   else if (step === 'afterEdit') {
     if (text === '↩️ Повернутись в меню редагування') {
       ctx.scene.state.editStep = 'menu';
@@ -236,7 +281,6 @@ async function saveChanges(ctx) {
   reminders[reminderIndex] = ctx.scene.state.reminder;
   saveUserReminders(userId, reminders);
 
-  // Показуємо повідомлення зі збереженими кнопками
   await ctx.reply('✅ Всі зміни збережено.', Markup.keyboard([
     '↩️ Повернутись в меню редагування',
     '🏠 Головне меню'
