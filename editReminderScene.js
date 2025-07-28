@@ -98,10 +98,15 @@ editReminder.on('text', async (ctx) => {
         return;
       }
 
-      if (text === '❌ Вийти без збереження') {
-        await ctx.reply('Редагування скасовано.', Markup.removeKeyboard());
-        return ctx.scene.leave();
-      }
+     if (text === '❌ Вийти без збереження') {
+  ctx.scene.state.editStep = 'afterEdit'; // щоб не плутало логіку
+  await ctx.reply(
+    'Готово, ми на головній панелі.',
+    Markup.keyboard(['➕ Додати нагадування', '📋 Список нагадувань', 'ℹ️ Допомога']).resize()
+  );
+  return ctx.scene.leave();
+}
+
 
       await ctx.reply('⚠️ Обери дію з меню.');
       return;
