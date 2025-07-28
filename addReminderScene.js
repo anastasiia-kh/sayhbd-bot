@@ -1,6 +1,18 @@
 const { Scenes, Markup } = require('telegraf');
 const { v4: uuidv4 } = require('uuid');
-const { loadUserReminders, saveUserReminders } = require('./userStorage');
+const fs = require('fs');
+const path = require('path');
+
+const dataDir = './data'; // Папка з даними
+const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
+
+const loadUserReminders = (userId) =>
+  fs.existsSync(getUserFilePath(userId))
+    ? JSON.parse(fs.readFileSync(getUserFilePath(userId)))
+    : [];
+
+const saveUserReminders = (userId, data) =>
+  fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
 
 const reminderOptions = [
   { label: 'У день події', value: 0 },
@@ -18,13 +30,13 @@ const mainMenuKeyboard = Markup.keyboard([
 const addReminder = new Scenes.WizardScene(
   'addReminder',
 
+  // Крок 0 - Ввести дату
   async (ctx) => {
-    await ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95', {
-      reply_markup: { remove_keyboard: true }
-    });
+    await ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95', Markup.removeKeyboard());
     return ctx.wizard.next();
   },
 
+  // Крок 1 - Обробка введеної дати
   async (ctx) => {
     if (!ctx.message || !ctx.message.text) {
       return ctx.reply('⚠️ Надішли, будь ласка, дату текстом.');
@@ -60,13 +72,15 @@ const addReminder = new Scenes.WizardScene(
     }
 
     ctx.wizard.state.date = rawDate;
+
     await ctx.reply(
-      '📝 Введи нотатку (імʼя, подія, тощо)',
+      '📝 Введи нотатку (імʼя, подія, тощо) або натисни "⏭ Пропустити"',
       Markup.inlineKeyboard([[Markup.button.callback('⏭ Пропустити', 'skip_note')]])
     );
     return ctx.wizard.next();
   },
 
+  // Крок 2 - Обробка нотатки або пропуску
   async (ctx) => {
     if (ctx.callbackQuery?.data === 'skip_note') {
       ctx.wizard.state.note = '';
@@ -95,6 +109,7 @@ const addReminder = new Scenes.WizardScene(
     return ctx.wizard.next();
   },
 
+  // Крок 3 - Обробка вибору remindBefore та збереження
   async (ctx) => {
     const data = ctx.callbackQuery?.data;
     const state = ctx.wizard.state;
