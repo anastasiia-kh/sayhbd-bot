@@ -11,7 +11,6 @@ if (!fs.existsSync(storageDir)) {
   console.log('Папка "data" існує');
 }
 
-// Далі можна експортувати функції роботи з файлами
 function getUserFilePath(userId) {
   return path.join(storageDir, `${userId}.json`);
 }
@@ -33,6 +32,7 @@ function saveUserReminders(userId, reminders) {
   const file = getUserFilePath(userId);
   try {
     fs.writeFileSync(file, JSON.stringify(reminders, null, 2), 'utf-8');
+    console.log(`✅ Нагадування успішно збережено у файл: ${file}`);
   } catch (err) {
     console.error(`❌ Помилка запису у ${file}:`, err.message);
   }

@@ -1,28 +1,9 @@
-const { Scenes, Markup } = require('telegraf');
-const { v4: uuidv4 } = require('uuid');
-const { loadUserReminders, saveUserReminders } = require('./userStorage');
-
-const mainMenuKeyboard = Markup.keyboard([
-  ['➕ Додати нагадування'],
-  ['📋 Список нагадувань'],
-  ['ℹ️ Допомога']
-]).resize();
-
-const reminderOptions = [
-  { label: 'У день події', value: 0 },
-  { label: 'За 1 день', value: 1 },
-  { label: 'За 3 дні', value: 3 },
-  { label: 'За 7 днів', value: 7 }
-];
-
 const addReminder = new Scenes.WizardScene(
   'addReminder',
 
   async (ctx) => {
     await ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95', {
-      reply_markup: {
-        remove_keyboard: true
-      }
+      reply_markup: { remove_keyboard: true }
     });
     return ctx.wizard.next();
   },
@@ -40,10 +21,15 @@ const addReminder = new Scenes.WizardScene(
     }
 
     const [day, month, yearPart] = rawDate.split(/[./\-\s]/);
+
+    if (!yearPart) {
+      return ctx.reply('❌ Будь ласка, вкажи повну дату з роком, наприклад: 25.07.1995');
+    }
+
     const dayNum = parseInt(day);
     const monthNum = parseInt(month);
     let yearNum = parseInt(yearPart);
-    if (yearPart?.length === 2) {
+    if (yearPart.length === 2) {
       const currentYear = new Date().getFullYear() % 100;
       const century = yearNum > currentYear ? 1900 : 2000;
       yearNum += century;
@@ -126,18 +112,19 @@ const addReminder = new Scenes.WizardScene(
 
       const reminders = loadUserReminders(ctx.from.id);
 
-      reminders.push({
-  id: uuidv4(),
-  date: ctx.wizard.state.date,
-  note: ctx.wizard.state.note || '',
-  remindBefore: ctx.wizard.state.remindBefore.length ? ctx.wizard.state.remindBefore.sort((a,b)=>a-b) : []
-});
+      const newReminder = {
+        id: uuidv4(),
+        date: state.date,
+        note: state.note,
+        remindBefore: [...state.remindBefore].sort((a,b) => a-b)
+      };
 
-
-
+      reminders.push(newReminder);
       saveUserReminders(ctx.from.id, reminders);
 
-      console.log('Додано нове нагадування:', reminders[reminders.length - 1]); // лог
+      console.log('Додано нове нагадування:', newReminder);
+
+      ctx.wizard.state = {};  // скидаємо стан
 
       await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
       return ctx.scene.leave();
