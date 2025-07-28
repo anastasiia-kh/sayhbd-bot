@@ -7,52 +7,12 @@ const mainMenuKeyboard = Markup.keyboard([
   ['ℹ️ Допомога']
 ]).resize();
 
-const funnyDateErrors = [
-  '❌ Дата виглядає як рецепт бабусі, а не календар. Спробуй ще раз, наприклад: 25.07.1995',
-  '📅 Я, звісно, бот, але 99.99.9999 навіть мене лякає. Спробуй формат: 1/1/95',
-  '😅 Це не дата, це телепорт у паралельний вимір. Напиши щось типу: 1/1/95',
-  '🧐 Ні, це не дата. Це щось… дуже сміливе. Краще: 10-12-2000',
-  '❌ Таку дату я навіть у серіалі "Темрява" не бачив. Формат має бути: 25.07.1995',
-  '⛔️ Ні-ні, я не можу це зберегти. Мені потрібна дата у форматі: 25.07.1995 або подібному',
-  '📆 Це більше схоже на номер поштового індексу. Спробуй так: 25.07.1995',
-  '🛸 Це що, координати прибульців? Мені потрібна дата, наприклад: 01.01.2000',
-  '📜 Я не архівіст. Формат дати має бути простим: 25.07.1995',
-  '🕳️ Я не зміг знайти цю дату навіть у календарі майя. Введи щось на кшталт: 10-12-2000'
+const reminderOptions = [
+  { label: 'У день події', value: 0 },
+  { label: 'За 1 день', value: 1 },
+  { label: 'За 3 дні', value: 3 },
+  { label: 'За 7 днів', value: 7 }
 ];
-
-const loadingMessages = [
-  '📦 Зберігаю нагадування...',
-  '🧠 Думаю над цим...',
-  '✨ Упаковую в мозок...',
-  '🕐 Записую в секретний щоденник...',
-  '🔮 Заклинаю бота памʼятати...',
-  '📋 Вирізаю з паперу і вклеюю...'
-];
-
-const successMessages = [
-  '✅ Додано! Надійно записано між рядками коду 🤖',
-  '📌 Готово! Я це запам’ятаю краще, ніж свій день народження',
-  '🧠 Записано в мою вічну памʼять!',
-  '💾 Збережено. Тепер точно не забудемо!',
-  '🪄 Магія збереження завершена. Дата: {date}',
-  '✅ Є контакт! {note} на {date}',
-  '📎 Твоє нагадування — під скріпку і в архів 📁',
-  '🎯 Зафіксовано! Буду пінгувати у потрібний день 📅',
-  '📅 Занотовано: {note} — {date}',
-  '📝 Тихенько записав... ніхто не дізнається 😉'
-];
-
-const pickSuccessMessage = (note, date) => {
-  const withNote = successMessages.filter((msg) => msg.includes('{note}'));
-  const withoutNote = successMessages.filter((msg) => !msg.includes('{note}'));
-
-  const pool = note ? withNote : withoutNote;
-  const template = pool[Math.floor(Math.random() * pool.length)];
-
-  return template
-    .replace('{note}', note)
-    .replace('{date}', date);
-};
 
 const addReminder = new Scenes.WizardScene(
   'addReminder',
@@ -75,8 +35,7 @@ const addReminder = new Scenes.WizardScene(
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}([./\-\s]\d{2,4})?$/;
 
     if (!dateRegex.test(rawDate)) {
-      const randomError = funnyDateErrors[Math.floor(Math.random() * funnyDateErrors.length)];
-      return ctx.reply(randomError);
+      return ctx.reply('❌ Невірна дата. Приклад: 25.07.1995');
     }
 
     const [day, month, yearPart] = rawDate.split(/[./\-\s]/);
@@ -95,55 +54,76 @@ const addReminder = new Scenes.WizardScene(
       dateObj.getMonth() + 1 !== monthNum ||
       dateObj.getFullYear() !== yearNum
     ) {
-      return ctx.reply(
-        '❌ Невірна дата. Наприклад, 31.11.2000 — це неіснуючий день. Спробуй ще раз.'
-      );
+      return ctx.reply('❌ Невірна дата. Спробуй ще раз.');
     }
 
     ctx.wizard.state.date = rawDate;
-
-    ctx.reply(
-      '📝 Введи нотатку (імʼя, подія, тощо)',
-      Markup.inlineKeyboard([
-        [Markup.button.callback('⏭ Пропустити і зберегти', 'skip_note')]
-      ])
-    );
+    ctx.reply('📝 Введи нотатку (імʼя, подія, тощо)');
     return ctx.wizard.next();
   },
 
   async (ctx) => {
-    const { date } = ctx.wizard.state;
+    if (!ctx.message || !ctx.message.text) {
+      return ctx.reply('⚠️ Надішли нотатку текстом.');
+    }
 
-    const showSuccess = async (text) => {
-      const msgText = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
-      const msg = await ctx.reply(msgText);
-      setTimeout(async () => {
-        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, text);
-        await ctx.reply('🔽 Головне меню:', mainMenuKeyboard);
-      }, 1500);
-    };
+    ctx.wizard.state.note = ctx.message.text.trim();
+    ctx.wizard.state.remindBefore = [];
 
-    if (ctx.callbackQuery?.data === 'skip_note') {
-      ctx.answerCbQuery();
+    const buttons = reminderOptions.map((opt) =>
+      Markup.button.callback(opt.label, `toggle_${opt.value}`)
+    );
+
+    ctx.reply(
+      '🕐 Коли надіслати нагадування? Обери один або кілька варіантів:',
+      Markup.inlineKeyboard([
+        [buttons[0], buttons[1]],
+        [buttons[2], buttons[3]],
+        [Markup.button.callback('✅ Готово', 'done')]
+      ])
+    );
+
+    return ctx.wizard.next();
+  },
+
+  async (ctx) => {
+    const data = ctx.callbackQuery?.data;
+    const state = ctx.wizard.state;
+
+    if (!data) return;
+
+    if (data.startsWith('toggle_')) {
+      const value = parseInt(data.replace('toggle_', ''));
+      const idx = state.remindBefore.indexOf(value);
+      if (idx === -1) {
+        state.remindBefore.push(value);
+      } else {
+        state.remindBefore.splice(idx, 1);
+      }
+
+      ctx.answerCbQuery(
+        state.remindBefore.includes(value)
+          ? `✅ Додано: ${value === 0 ? 'У день події' : `За ${value} днів`}`
+          : `❌ Видалено: ${value === 0 ? 'У день події' : `За ${value} днів`}`
+      );
+    }
+
+    if (data === 'done') {
+      if (!state.remindBefore.length) {
+        return ctx.answerCbQuery('⚠️ Обери хоча б один варіант!');
+      }
+
       const reminders = loadUserReminders(ctx.from.id);
-      reminders.push({ date, note: '' });
+      reminders.push({
+        date: state.date,
+        note: state.note,
+        remindBefore: state.remindBefore.sort((a, b) => a - b)
+      });
       saveUserReminders(ctx.from.id, reminders);
 
-      await showSuccess(pickSuccessMessage(null, date));
+      await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
       return ctx.scene.leave();
     }
-
-    if (!ctx.message || !ctx.message.text) {
-      return ctx.reply('⚠️ Надішли нотатку текстом або натисни "Пропустити і зберегти".');
-    }
-
-    const note = ctx.message.text.trim();
-    const reminders = loadUserReminders(ctx.from.id);
-    reminders.push({ date, note });
-    saveUserReminders(ctx.from.id, reminders);
-
-    await showSuccess(pickSuccessMessage(note, date));
-    return ctx.scene.leave();
   }
 );
 
