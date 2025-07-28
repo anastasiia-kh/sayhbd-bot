@@ -39,21 +39,6 @@ const reminderOptions = [
 
 const editReminder = new Scenes.BaseScene('editReminder');
 
-// Функція-хелпер для скасування дії з персоналізованим текстом
-async function handleCancel(ctx, step) {
-  let cancelMessage = '❌ Дія скасована. Немає про що турбуватись.';
-  if (step === 'editDate') cancelMessage = '❌ Скасовано редагування дати.';
-  else if (step === 'editNote') cancelMessage = '❌ Скасовано редагування нотатки.';
-  else if (step === 'editRemindBefore') cancelMessage = '❌ Скасовано редагування часу сповіщень.';
-
-  ctx.scene.state.editStep = 'afterEdit';
-  await ctx.reply(
-    cancelMessage,
-    Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
-  );
-  await showMainMenu(ctx);
-}
-
 editReminder.enter(async (ctx) => {
   const reminders = ctx.scene.state.allReminders || loadUserReminders(ctx.from.id);
   const editId = ctx.scene.state.editId;
@@ -76,6 +61,7 @@ editReminder.on('text', async (ctx) => {
   const step = ctx.scene.state.editStep;
   const text = ctx.message.text;
 
+  // Обробка скасування на будь-якому кроці
   if (text === '❌ Скасувати' || text === '/cancel') {
     ctx.scene.state.editStep = 'afterEdit';
     await ctx.reply(
@@ -87,46 +73,106 @@ editReminder.on('text', async (ctx) => {
 
   switch (step) {
     case 'menu':
+      if (text === '🗓 Змінити дату') {
+        ctx.scene.state.editStep = 'editDate';
+        await ctx.reply(
+          'Введи нову дату у форматі: 25.07.1996 або 1/1/95\nАбо /cancel для скасування',
+          Markup.keyboard(['❌ Скасувати', '↩️ Повернутись в меню редагування']).resize()
+        );
+        return;
+      }
+
       if (text === '📝 Змінити нотатку') {
         ctx.scene.state.editStep = 'editNote';
         await ctx.reply(
           'Введи нову нотатку або /cancel для скасування',
-          Markup.keyboard(['❌ Скасувати']).resize()
+          Markup.keyboard(['❌ Скасувати', '↩️ Повернутись в меню редагування']).resize()
         );
-      } else if (text === '⏰ Змінити час сповіщень') {
+        return;
+      }
+
+      if (text === '⏰ Змінити час сповіщень') {
         ctx.scene.state.editStep = 'editRemindBefore';
         await ctx.reply('Вибери, коли надіслати нагадування (натискай кнопки):');
         await showRemindBeforeButtons(ctx);
-      } 
-      // інші випадки як є
-      else {
-        await ctx.reply('⚠️ Обери дію з меню.');
+        return;
       }
-      break;
 
-    case 'editNote':
-      if (!text) {
-        await ctx.reply('⚠️ Надішли текст нотатки або /cancel.');
-      } else {
-        ctx.scene.state.reminder.note = text;
-        ctx.scene.state.reminder.noteEdited = true;
+      if (text === '❌ Вийти без збереження') {
+        await ctx.reply('Редагування скасовано.', Markup.removeKeyboard());
+        return ctx.scene.leave();
+      }
+
+      await ctx.reply('⚠️ Обери дію з меню.');
+      return;
+
+    case 'editDate':
+      {
+        const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
+        if (!dateRegex.test(text)) {
+          await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
+          return;
+        }
+
+        const [day, month, yearPart] = text.split(/[./\-\s]/);
+        let yearNum = Number(yearPart);
+        const currentYear = new Date().getFullYear() % 100;
+        const century = yearNum > currentYear ? 1900 : 2000;
+        if (yearPart.length === 2) yearNum += century;
+
+        ctx.scene.state.reminder.date = text;
         ctx.scene.state.editStep = 'afterEdit';
+        ctx.scene.state.reminder.dateEdited = true;
+
         await ctx.reply(
-          `Нотатку змінено на: ${text}`,
+          `Дата змінена на: ${text}`,
           Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
         );
+        return;
       }
-      break;
+
+    case 'editNote':
+      {
+        ctx.scene.state.reminder.note = text || '';
+        ctx.scene.state.editStep = 'afterEdit';
+        ctx.scene.state.reminder.noteEdited = true;
+
+        await ctx.reply(
+          `Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`,
+          Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+        );
+        return;
+      }
 
     case 'editRemindBefore':
-      // Якщо отримали текст замість callback — підказка
+      // Якщо користувач надіслав текст замість натискання кнопок
       await ctx.reply('⚠️ Для вибору часу сповіщень використовуй кнопки.');
-      break;
+      return;
 
-    // інші стани як editDate, afterEdit тощо...
+    case 'afterEdit':
+      if (text === '↩️ Повернутись в меню редагування') {
+        ctx.scene.state.editStep = 'menu';
+        await showMainMenu(ctx);
+        return;
+      }
+      if (text === '🏠 Головне меню') {
+        await ctx.reply(
+          'Продовжимо роботу? Обери будь-яку дію зі списку нижче.',
+          Markup.keyboard([
+            ['➕ Додати нагадування'],
+            ['📋 Список нагадувань'],
+            ['ℹ️ Допомога']
+          ]).resize()
+        );
+        ctx.scene.state.editStep = null; // або ctx.scene.leave()
+        return;
+      }
+      await ctx.reply('⚠️ Використовуй кнопки меню.');
+      return;
 
     default:
       await ctx.reply('⚠️ Використовуй кнопки меню.');
+      return;
   }
 });
 
@@ -175,6 +221,21 @@ editReminder.on('callback_query', async (ctx) => {
     return;
   }
 });
+
+// Допоміжна функція для обробки скасування (callback)
+async function handleCancel(ctx, step) {
+  let cancelMessage = '❌ Дія скасована. Немає про що турбуватись.';
+  if (step === 'editDate') cancelMessage = '❌ Скасовано редагування дати.';
+  else if (step === 'editNote') cancelMessage = '❌ Скасовано редагування нотатки.';
+  else if (step === 'editRemindBefore') cancelMessage = '❌ Скасовано редагування часу сповіщень.';
+
+  ctx.scene.state.editStep = 'afterEdit';
+  await ctx.reply(
+    cancelMessage,
+    Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+  );
+  await showMainMenu(ctx);
+}
 
 async function showMainMenu(ctx) {
   const reminder = ctx.scene.state.reminder;
@@ -237,10 +298,13 @@ async function saveChanges(ctx) {
   reminders[reminderIndex] = ctx.scene.state.reminder;
   saveUserReminders(userId, reminders);
 
-  await ctx.reply('✅ Всі зміни збережено.', Markup.keyboard([
-    '↩️ Повернутись в меню редагування',
-    '🏠 Головне меню'
-  ]).resize());
+  await ctx.reply(
+    '✅ Всі зміни збережено.',
+    Markup.keyboard([
+      '↩️ Повернутись в меню редагування',
+      '🏠 Головне меню'
+    ]).resize()
+  );
 }
 
 module.exports = editReminder;
