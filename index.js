@@ -5,7 +5,8 @@ const path = require('path');
 const cron = require('node-cron');
 const addReminderScene = require('./addReminderScene');
 const editReminderScene = require('./editReminderScene');
-const { loadUserReminders } = require('./userStorage');
+const { loadUserReminders, saveUserReminders } = require('./userStorage');
+
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const stage = new Scenes.Stage([addReminderScene, editReminderScene]);
@@ -111,13 +112,16 @@ if (data.startsWith('edit_')) {
 
 
   if (data.startsWith('delete_')) {
-    const index = parseInt(data.split('_')[1]);
-    if (reminders[index]) {
-      reminders.splice(index, 1);
-      saveReminders(userId, reminders);
-      return ctx.reply('🗑 Нагадування видалено.');
-    }
+  const index = parseInt(data.split('_')[1]);
+  if (reminders.length > index) {
+    reminders.splice(index, 1);
+    saveUserReminders(userId, reminders);
+    return ctx.reply('🗑 Нагадування видалено.');
+  } else {
+    return ctx.reply('⚠️ Нагадування не знайдено.');
   }
+}
+
 });
 
 
