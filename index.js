@@ -114,6 +114,9 @@ bot.on('callback_query', async (ctx) => {
   const userId = ctx.from.id;
   const reminders = loadUserReminders(userId);
 
+   console.log('Callback data:', data);
+  console.log('Reminders:', reminders);
+
   if (data.startsWith('edit_')) {
     const id = data.split('_')[1];
     const reminderIndex = reminders.findIndex(r => r.id === id);
