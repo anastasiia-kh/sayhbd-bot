@@ -2,7 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = './data'; // Твоя папка з даними
+const dataDir = './data';
 const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
 
 const loadReminders = (userId) =>
@@ -16,7 +16,7 @@ const saveReminders = (userId, data) =>
 const editReminder = new Scenes.WizardScene(
   'editReminder',
 
-  // Крок 0 - Показати меню редагування (опції, які не вибрані зараз)
+  // Крок 0 — показуємо меню через inline keyboard (callback)
   async (ctx) => {
     const reminders = ctx.scene.state.allReminders || loadReminders(ctx.from.id);
     const editId = ctx.scene.state.editId;
@@ -31,60 +31,57 @@ const editReminder = new Scenes.WizardScene(
     ctx.scene.state.selectedRemindBefore = new Set(reminder.remindBefore || []);
     ctx.scene.state.editing = null;
 
-    await showEditMenu(ctx);
+    await sendEditMenu(ctx);
   },
 
-  // Крок 1 - Обробка вибору в меню редагування
+  // Крок 1 — обробляємо callback_query від меню
   async (ctx) => {
-    const text = ctx.message?.text;
-    if (!text) {
-      await ctx.reply('⚠️ Будь ласка, обери дію з меню.');
+    const data = ctx.callbackQuery?.data;
+    if (!data) {
+      await ctx.reply('⚠️ Будь ласка, користуйся кнопками меню.');
       return;
     }
 
-    if (text === '❌ Скасувати') {
+    if (data === 'cancel') {
+      await ctx.editMessageReplyMarkup(); // прибрати inline кнопки
       await ctx.reply('Редагування скасовано.', Markup.removeKeyboard());
       return ctx.scene.leave();
     }
 
-    if (text === '💾 Зберегти й вийти') {
+    if (data === 'save_exit') {
       await saveChanges(ctx);
       return ctx.scene.leave();
     }
 
-    // Встановлюємо поточний режим редагування і переходимо на відповідний крок
-    if (text === '🗓 Змінити дату') {
+    if (data === 'edit_date') {
       ctx.scene.state.editing = 'date';
-      await ctx.reply(
-        'Введи нову дату у форматі: 25.07.1996 або 1/1/95 або /cancel для скасування',
-        Markup.removeKeyboard()
+      await ctx.editMessageText(
+        'Введи нову дату у форматі: 25.07.1996 або 1/1/95 або /cancel для скасування'
       );
       return ctx.wizard.next();
     }
 
-    if (text === '📝 Змінити нотатку') {
+    if (data === 'edit_note') {
       ctx.scene.state.editing = 'note';
-      await ctx.reply('Введи нову нотатку або /cancel для скасування', Markup.removeKeyboard());
+      await ctx.editMessageText('Введи нову нотатку або /cancel для скасування');
       return ctx.wizard.next();
     }
 
-    if (text === '⏰ Змінити нагадування (дні)') {
+    if (data === 'edit_remindBefore') {
       ctx.scene.state.editing = 'remindBefore';
       await showRemindBeforeButtons(ctx);
-      return ctx.wizard.selectStep(3); // Йдемо на крок 3
+      return ctx.wizard.selectStep(3);
     }
-
-    await ctx.reply('⚠️ Обери одну з доступних опцій.');
   },
 
-  // Крок 2 - Введення нової дати або нотатки
+  // Крок 2 — обробка текстового введення для дати або нотатки
   async (ctx) => {
     const text = ctx.message?.text;
 
     if (text === '/cancel') {
       ctx.scene.state.editing = null;
       await ctx.reply('Редагування скасовано. Повертаємось у меню редагування.', Markup.removeKeyboard());
-      await showEditMenu(ctx);
+      await sendEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
 
@@ -120,7 +117,7 @@ const editReminder = new Scenes.WizardScene(
       ctx.scene.state.reminder.date = rawDate;
       ctx.scene.state.editing = null;
       await ctx.reply(`Дата змінена на: ${rawDate}`);
-      await showEditMenu(ctx);
+      await sendEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
 
@@ -129,12 +126,12 @@ const editReminder = new Scenes.WizardScene(
       ctx.scene.state.reminder.note = note || '';
       ctx.scene.state.editing = null;
       await ctx.reply(`Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`);
-      await showEditMenu(ctx);
+      await sendEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
   },
 
-  // Крок 3 - Редагування remindBefore (toggle кнопки)
+  // Крок 3 — редагування remindBefore через inline кнопки
   async (ctx) => {
     const data = ctx.callbackQuery?.data;
     if (!data) return;
@@ -158,42 +155,43 @@ const editReminder = new Scenes.WizardScene(
       ctx.scene.state.reminder.remindBefore = Array.from(ctx.scene.state.selectedRemindBefore).sort((a,b) => a-b);
       ctx.scene.state.editing = null;
       await ctx.reply('🔖 Нагадування оновлено.');
-      await showEditMenu(ctx);
+      await sendEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
 
     if (data === 'cancel_edit') {
       ctx.scene.state.editing = null;
       await ctx.reply('Редагування скасовано.');
-      await showEditMenu(ctx);
+      await sendEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
   }
 );
 
-async function showEditMenu(ctx) {
+async function sendEditMenu(ctx) {
   const editing = ctx.scene.state.editing;
   const reminder = ctx.scene.state.reminder;
 
   const buttons = [];
 
-  if (editing !== 'date') buttons.push('🗓 Змінити дату');
-  if (editing !== 'note') buttons.push('📝 Змінити нотатку');
-  if (editing !== 'remindBefore') buttons.push('⏰ Змінити нагадування (дні)');
-  buttons.push('💾 Зберегти й вийти');
-  buttons.push('❌ Скасувати');
+  if (editing !== 'date') buttons.push(Markup.button.callback('🗓 Змінити дату', 'edit_date'));
+  if (editing !== 'note') buttons.push(Markup.button.callback('📝 Змінити нотатку', 'edit_note'));
+  if (editing !== 'remindBefore') buttons.push(Markup.button.callback('⏰ Змінити нагадування (дні)', 'edit_remindBefore'));
+  buttons.push(Markup.button.callback('💾 Зберегти й вийти', 'save_exit'));
+  buttons.push(Markup.button.callback('❌ Скасувати', 'cancel'));
+
+  const inlineKeyboard = Markup.inlineKeyboard(buttons.map(b => [b]));
 
   const text = `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nЩо хочеш змінити?`;
 
   if (ctx.updateType === 'callback_query' || ctx.callbackQuery) {
     try {
-      await ctx.editMessageText(text, Markup.keyboard(buttons).resize());
+      await ctx.editMessageText(text, inlineKeyboard);
     } catch {
-      // Якщо редагувати не вдається, надсилаємо нове повідомлення
-      await ctx.reply(text, Markup.keyboard(buttons).resize());
+      await ctx.reply(text, inlineKeyboard);
     }
   } else {
-    await ctx.reply(text, Markup.keyboard(buttons).resize());
+    await ctx.reply(text, inlineKeyboard);
   }
 }
 
