@@ -58,16 +58,26 @@ const addReminder = new Scenes.WizardScene(
     }
 
     ctx.wizard.state.date = rawDate;
-    ctx.reply('📝 Введи нотатку (імʼя, подія, тощо)');
-    return ctx.wizard.next();
+    await ctx.reply(
+  '📝 Введи нотатку (імʼя, подія, тощо)',
+  Markup.inlineKeyboard([
+    [Markup.button.callback('⏭ Пропустити', 'skip_note')]
+  ])
+);
+return ctx.wizard.next();
+
   },
 
   async (ctx) => {
-    if (!ctx.message || !ctx.message.text) {
-      return ctx.reply('⚠️ Надішли нотатку текстом.');
-    }
+    if (ctx.callbackQuery?.data === 'skip_note') {
+  ctx.wizard.state.note = '';
+  await ctx.answerCbQuery('⏭ Нотатку пропущено');
+} else if (ctx.message?.text) {
+  ctx.wizard.state.note = ctx.message.text.trim();
+} else {
+  return ctx.reply('⚠️ Надішли нотатку текстом або натисни “Пропустити”.');
+}
 
-    ctx.wizard.state.note = ctx.message.text.trim();
     ctx.wizard.state.remindBefore = [];
 
     const buttons = reminderOptions.map((opt) =>
