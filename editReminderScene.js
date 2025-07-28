@@ -19,7 +19,7 @@ editReminder.enter((ctx) => {
   const { editId, allReminders } = ctx.scene.state || {};
   console.log('editId:', editId);
   console.log('allReminders:', allReminders);
-  const reminder = reminders.find(r => r.id === editId);  // шукаємо по id
+  const reminder = allReminders.find(r => r.id === editId);
 
   if (!reminder) {
     ctx.reply('⚠️ Не вдалося знайти нагадування.');
