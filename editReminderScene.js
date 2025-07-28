@@ -7,6 +7,28 @@ const mainMenuKeyboard = Markup.keyboard([
   ['ℹ️ Допомога']
 ]).resize();
 
+const editSuccessMessages = [
+  '✏️ Готово! Я переписав усе краще, ніж будь-який редактор 📚',
+  '🛠️ Оновлено! Тепер виглядає ще краще!',
+  '✅ Все підправлено, як ти просив(ла)',
+  '📝 Запис оновлено. Тепер у мене остання версія!',
+  '🔁 Все змінив. Свіже, як тільки з редактора!',
+  '💾 Збережено! У новій редакції виглядає чудово!',
+  '🧼 Почистив-підшаманив — готово!',
+  '🧙‍♂️ Трішки магії — і все як новеньке!',
+  '🖊️ Готово! Запис не впізнати 😉',
+  '🔧 Внесено зміни. Нотатка стала ще кращою!'
+];
+
+const loadingMessages = [
+  '🔧 Вношу зміни...',
+  '🖊️ Переоформлюю нотатку...',
+  '🧹 Шліфую дату і нотатку...',
+  '✏️ Переписую красиво...',
+  '💭 Думаю, як зробити краще...',
+  '🕐 Оновлюю запис у базі...'
+];
+
 const editReminder = new Scenes.WizardScene(
   'editReminder',
 
@@ -69,7 +91,7 @@ const editReminder = new Scenes.WizardScene(
     return ctx.wizard.next();
   },
 
-  (ctx) => {
+  async (ctx) => {
     if (ctx.callbackQuery?.data === 'skip_note') {
       ctx.session.skipNote = true;
       ctx.answerCbQuery();
@@ -97,10 +119,17 @@ const editReminder = new Scenes.WizardScene(
 
     saveUserReminders(ctx.from.id, reminders);
 
-    ctx.reply(
-      updated ? '✅ Нагадування оновлено!' : 'ℹ️ Нічого не змінено.',
-      mainMenuKeyboard
-    );
+    const loadingText = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+    const msg = await ctx.reply(loadingText);
+
+    setTimeout(() => {
+      const finalText = updated
+        ? editSuccessMessages[Math.floor(Math.random() * editSuccessMessages.length)]
+        : 'ℹ️ Нічого не змінено.';
+
+      ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, finalText);
+      ctx.reply('🔽 Головне меню:', mainMenuKeyboard);
+    }, 1500);
 
     return ctx.scene.leave();
   }
