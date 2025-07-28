@@ -116,7 +116,7 @@ if (data.startsWith('edit_')) {
   if (reminders.length > index) {
     reminders.splice(index, 1);
     saveUserReminders(userId, reminders);
-    return ctx.reply('🗑 Нагадування видалено.');
+    return ctx.editMessageText('🗑 Нагадування видалено.');
   } else {
     return ctx.reply('⚠️ Нагадування не знайдено.');
   }
