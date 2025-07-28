@@ -2,7 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = path.join(__dirname, 'data'); // Абсолютний шлях до папки data
+const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
@@ -39,10 +39,16 @@ const reminderOptions = [
 
 const editReminder = new Scenes.BaseScene('editReminder');
 
-async function handleCancel(ctx) {
+// Функція-хелпер для скасування дії з персоналізованим текстом
+async function handleCancel(ctx, step) {
+  let cancelMessage = '❌ Дія скасована. Немає про що турбуватись.';
+  if (step === 'editDate') cancelMessage = '❌ Скасовано редагування дати.';
+  else if (step === 'editNote') cancelMessage = '❌ Скасовано редагування нотатки.';
+  else if (step === 'editRemindBefore') cancelMessage = '❌ Скасовано редагування часу сповіщень.';
+
   ctx.scene.state.editStep = 'afterEdit';
   await ctx.reply(
-    '❌ Дія скасована. Немає про що турбуватись.',
+    cancelMessage,
     Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
   );
   await showMainMenu(ctx);
@@ -68,12 +74,12 @@ editReminder.enter(async (ctx) => {
 
 editReminder.on('text', async (ctx) => {
   const text = ctx.message.text;
-
-  if (text === '/cancel') {
-    return handleCancel(ctx);
-  }
-
   const step = ctx.scene.state.editStep;
+
+  // Перевірка на скасування у будь-який момент
+  if (text === '/cancel' || text === '❌ Скасувати') {
+    return handleCancel(ctx, step);
+  }
 
   if (step === 'menu') {
     if (text === '🗓 Змінити дату') {
@@ -110,7 +116,7 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  else if (step === 'editDate') {
+  if (step === 'editDate') {
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
     if (!dateRegex.test(text)) {
       await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
@@ -134,10 +140,10 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  else if (step === 'editNote') {
+  if (step === 'editNote') {
     ctx.scene.state.reminder.note = text || '';
     ctx.scene.state.editStep = 'afterEdit';
-    ctx.scene.state.reminder.noteEdited = true;
+    ctx.scene.state.noteEdited = true;
 
     await ctx.reply(
       `Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`,
@@ -146,33 +152,34 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  else if (step === 'afterEdit') {
+  if (step === 'afterEdit') {
     if (text === '↩️ Повернутись в меню редагування') {
       ctx.scene.state.editStep = 'menu';
       await showMainMenu(ctx);
       return;
-    } else if (text === '🏠 Головне меню') {
+    }
+    if (text === '🏠 Головне меню') {
       await saveChanges(ctx);
       ctx.scene.state.editStep = 'menu';
       await showMainMenu(ctx);
       return;
-    } else {
-      await ctx.reply('⚠️ Використовуй кнопки меню.');
-      return;
     }
+    await ctx.reply('⚠️ Використовуй кнопки меню.');
+    return;
   }
 });
 
 editReminder.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
   const selected = ctx.scene.state.selectedRemindBefore;
+  const step = ctx.scene.state.editStep;
 
   if (data === 'cancel_edit') {
     await ctx.answerCbQuery('❌ Дія скасована.');
-    return handleCancel(ctx);
+    return handleCancel(ctx, step);
   }
 
-  if (ctx.scene.state.editStep !== 'editRemindBefore') return;
+  if (step !== 'editRemindBefore') return;
 
   if (data === 'skip_remind') {
     selected.clear();
