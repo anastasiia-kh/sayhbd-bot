@@ -7,7 +7,7 @@ const addReminderScene = require('./addReminderScene');
 const editReminderScene = require('./editReminderScene');
 const { loadUserReminders, saveUserReminders } = require('./userStorage');
 
-// 🔒 Перевірка на наявність токенів
+// Перевірка змінних середовища
 if (!process.env.BOT_TOKEN || !process.env.RENDER_EXTERNAL_URL) {
   throw new Error('❌ BOT_TOKEN або RENDER_EXTERNAL_URL не задані у .env');
 }
@@ -17,6 +17,7 @@ const app = express();
 const WEBHOOK_PATH = `/bot${process.env.BOT_TOKEN}`;
 const WEBHOOK_URL = `${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
 
+// Обчислення віку за датою
 const calculateAge = (dateStr) => {
   const [day, month, yearRaw] = dateStr.split(/[./\-\s]+/);
   let year = parseInt(yearRaw);
@@ -33,6 +34,7 @@ const calculateAge = (dateStr) => {
   return age;
 };
 
+// Шаблони повідомлень
 const messageTemplates = [
   `🎉 Сьогодні важлива дата!\n📅 {date} — виповнюється {age} років!\n{note}`,
   `🦄 Увага-увага! День народження на горизонті!\n🎂 {date} — {age} років!\n{note}`,
@@ -50,16 +52,22 @@ const stage = new Scenes.Stage([addReminderScene, editReminderScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
-// Команди
+// Старт / меню
 bot.start((ctx) => {
   ctx.reply(
-    '👋 Привіт! Я тут, щоб підняти твій соц. рейтинг і вберегти від факапів з днями народження.\n\n➕ Додати нагадування\n📋 Список нагадувань',
-    Markup.keyboard(['➕ Додати нагадування', '📋 Список нагадувань']).resize()
+    '👋 Привіт! Я тут, щоб підняти твій соц. рейтинг і вберегти від факапів з днями народження.\n\nОберіть дію нижче:',
+    Markup.keyboard([
+      ['➕ Додати нагадування'],
+      ['📋 Список нагадувань'],
+      ['ℹ️ Допомога']
+    ]).resize()
   );
 });
 
+// Додати нагадування
 bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 
+// Список нагадувань
 bot.hears('📋 Список нагадувань', (ctx) => {
   const reminders = loadUserReminders(ctx.from.id);
   if (!reminders.length) return ctx.reply('😶 У тебе ще нема жодного нагадування.');
@@ -78,6 +86,28 @@ bot.hears('📋 Список нагадувань', (ctx) => {
   });
 });
 
+// Допомога
+bot.hears('ℹ️ Допомога', (ctx) => {
+  ctx.reply(
+    `🛟 Як я працюю:
+
+1️⃣ Натисни *"Додати нагадування"*, щоб створити нове.
+2️⃣ Введи дату (наприклад, 25.07.1990)
+3️⃣ Введи нотатку або натисни "Пропустити і зберегти"
+
+📋 У *"Списку нагадувань"* можна:
+— змінити ✏️
+— або видалити 🗑
+
+Я нагадаю тобі у день події 🎉
+
+Підтримувані формати дати: 25.07.1995, 1/1/95, 10-12-2000
+
+👨‍💻 Якщо щось не працює — пиши сюди.`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
 // Зміна нагадування
 bot.action(/edit_(\d+)/, (ctx) => {
   ctx.session.editingIndex = Number(ctx.match[1]);
@@ -85,7 +115,7 @@ bot.action(/edit_(\d+)/, (ctx) => {
   ctx.scene.enter('editReminder');
 });
 
-// Видалення нагадування
+// Видалення
 bot.action(/delete_(\d+)/, (ctx) => {
   const index = Number(ctx.match[1]);
   const reminders = loadUserReminders(ctx.from.id);
@@ -96,7 +126,7 @@ bot.action(/delete_(\d+)/, (ctx) => {
   ctx.editMessageText('🗑 Нагадування видалено');
 });
 
-// CRON: перевірка щохвилини
+// CRON-перевірка щохвилини
 cron.schedule('* * * * *', () => {
   const today = new Date();
   const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
@@ -124,10 +154,10 @@ cron.schedule('* * * * *', () => {
   });
 });
 
-// Webhook setup для RENDER
+// Webhook на Render
 bot.telegram.setWebhook(WEBHOOK_URL);
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
-// Старт сервера
+// Запуск сервера
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
