@@ -129,9 +129,10 @@ const addReminder = new Scenes.WizardScene(
       reminders.push({
   id: uuidv4(),
   date: ctx.wizard.state.date,
-  note: ctx.wizard.state.note,
-  remindBefore: ctx.wizard.state.remindBefore.sort((a, b) => a - b)
+  note: ctx.wizard.state.note || '',
+  remindBefore: ctx.wizard.state.remindBefore.length ? ctx.wizard.state.remindBefore.sort((a,b)=>a-b) : []
 });
+
 
 
       saveUserReminders(ctx.from.id, reminders);

@@ -66,6 +66,10 @@ function ensureRemindersHaveIds(userId) {
       r.id = uuidv4();
       updated = true;
     }
+    if (!Array.isArray(r.remindBefore)) {
+      r.remindBefore = [];
+      updated = true;
+    }
   });
 
   if (updated) {
@@ -74,6 +78,7 @@ function ensureRemindersHaveIds(userId) {
 
   return reminders;
 }
+
 
 bot.start((ctx) => {
   ctx.reply(
