@@ -2,7 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = path.join(__dirname, 'data');
+const dataDir = path.join(__dirname, 'data'); // Абсолютний шлях до папки data
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
@@ -39,15 +39,6 @@ const reminderOptions = [
 
 const editReminder = new Scenes.BaseScene('editReminder');
 
-// Універсальна функція для обробки скасування дії
-async function handleCancel(ctx) {
-  await ctx.reply(
-    '❌ Дія скасована. Немає про що турбуватись.',
-    Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
-  );
-  ctx.scene.state.editStep = 'afterEdit'; // Переходимо в стан після редагування
-}
-
 editReminder.enter(async (ctx) => {
   const reminders = ctx.scene.state.allReminders || loadUserReminders(ctx.from.id);
   const editId = ctx.scene.state.editId;
@@ -60,8 +51,8 @@ editReminder.enter(async (ctx) => {
 
   ctx.scene.state.reminder = { ...reminder };
   ctx.scene.state.selectedRemindBefore = new Set(reminder.remindBefore || []);
-  ctx.scene.state.editStep = 'menu';
-  ctx.scene.state.remindersList = reminders;
+  ctx.scene.state.editStep = 'menu'; // початковий крок меню
+  ctx.scene.state.remindersList = reminders; // збережемо весь список для збереження
 
   await showMainMenu(ctx);
 });
@@ -69,11 +60,6 @@ editReminder.enter(async (ctx) => {
 editReminder.on('text', async (ctx) => {
   const step = ctx.scene.state.editStep;
   const text = ctx.message.text;
-
-  // Обробка скасування в будь-який момент
-  if (text === '❌ Скасувати' || text === '/cancel') {
-    return handleCancel(ctx);
-  }
 
   if (step === 'menu') {
     if (text === '🗓 Змінити дату') {
@@ -110,7 +96,17 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  if (step === 'editDate') {
+  else if (step === 'editDate') {
+    if (text === '/cancel') {
+      ctx.scene.state.editStep = 'menu';
+      await ctx.reply(
+        '❌ Дія скасована. Немає про що турбуватись.',
+        Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+      );
+      await showMainMenu(ctx);
+      return;
+    }
+
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
     if (!dateRegex.test(text)) {
       await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
@@ -134,7 +130,17 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  if (step === 'editNote') {
+  else if (step === 'editNote') {
+    if (text === '/cancel') {
+      ctx.scene.state.editStep = 'menu';
+      await ctx.reply(
+        '❌ Дія скасована. Немає про що турбуватись.',
+        Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+      );
+      await showMainMenu(ctx);
+      return;
+    }
+
     ctx.scene.state.reminder.note = text || '';
     ctx.scene.state.editStep = 'afterEdit';
     ctx.scene.state.reminder.noteEdited = true;
@@ -146,13 +152,15 @@ editReminder.on('text', async (ctx) => {
     return;
   }
 
-  if (step === 'afterEdit') {
+  else if (step === 'afterEdit') {
     if (text === '↩️ Повернутись в меню редагування') {
       ctx.scene.state.editStep = 'menu';
       await showMainMenu(ctx);
       return;
     } else if (text === '🏠 Головне меню') {
       await saveChanges(ctx);
+
+      // Після збереження показати меню замість видалення клавіатури
       ctx.scene.state.editStep = 'menu';
       await showMainMenu(ctx);
       return;
@@ -164,10 +172,20 @@ editReminder.on('text', async (ctx) => {
 });
 
 editReminder.on('callback_query', async (ctx) => {
-  if (ctx.scene.state.editStep !== 'editRemindBefore') return;
-
   const data = ctx.callbackQuery.data;
   const selected = ctx.scene.state.selectedRemindBefore;
+
+  if (data === 'cancel_edit') {
+    await ctx.answerCbQuery('❌ Дія скасована.');
+    await ctx.reply(
+      '❌ Дія скасована. Немає про що турбуватись.',
+      Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+    );
+    ctx.scene.state.editStep = 'afterEdit';
+    return;
+  }
+
+  if (ctx.scene.state.editStep !== 'editRemindBefore') return;
 
   if (data === 'skip_remind') {
     selected.clear();
@@ -199,13 +217,6 @@ editReminder.on('callback_query', async (ctx) => {
       'Нагадування оновлено.',
       Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
     );
-    return;
-  }
-
-  if (data === 'cancel_edit') {
-    ctx.scene.state.editStep = 'menu';
-    await ctx.answerCbQuery('Редагування скасовано.');
-    await showMainMenu(ctx);
     return;
   }
 });
@@ -271,10 +282,10 @@ async function saveChanges(ctx) {
   reminders[reminderIndex] = ctx.scene.state.reminder;
   saveUserReminders(userId, reminders);
 
-  await ctx.reply(
-    '✅ Всі зміни збережено.',
-    Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
-  );
+  await ctx.reply('✅ Всі зміни збережено.', Markup.keyboard([
+    '↩️ Повернутись в меню редагування',
+    '🏠 Головне меню'
+  ]).resize());
 }
 
 module.exports = editReminder;
