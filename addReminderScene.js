@@ -1,11 +1,39 @@
 const { Scenes, Markup } = require('telegraf');
 const { loadUserReminders, saveUserReminders } = require('./userStorage');
 
+const mainMenuKeyboard = Markup.keyboard([
+  ['➕ Додати нагадування'],
+  ['📋 Список нагадувань'],
+  ['ℹ️ Допомога']
+]).resize();
+
+const funnyDateErrors = [
+  '❌ Дата виглядає як рецепт бабусі, а не календар. Спробуй ще раз: 25.07.1995',
+  '📅 Я, звісно, бот, але 99.99.9999 навіть мене лякає. Спробуй формат 1/1/95 ',
+  '😅 Це не дата, це телепорт у паралельний вимір. Введи щось схоже на 1/1/95',
+  '🧐 Ні, це не дата. Це щось… дуже сміливе. Напиши, наприклад: 10-12-2000',
+  '❌ Таку дату я навіть у серіалі "Темрява" не бачив. Спробуєш ще раз? Формат 25.07.1995',
+  '⛔️ Ні-ні, я не можу це зберегти. Дата має бути схожа на 25.07.1995 або щось подібне.'
+];
+
+const loadingMessages = [
+  '📦 Зберігаю нагадування...',
+  '🧠 Думаю над цим...',
+  '✨ Упаковую в мозок...',
+  '🕐 Записую в секретний щоденник...',
+  '🔮 Заклинаю бота памʼятати...',
+  '📋 Вирізаю з паперу і вклеюю...'
+];
+
 const addReminder = new Scenes.WizardScene(
   'addReminder',
 
   async (ctx) => {
-    ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95');
+    ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95', {
+      reply_markup: {
+        remove_keyboard: true
+      }
+    });
     return ctx.wizard.next();
   },
 
@@ -18,19 +46,8 @@ const addReminder = new Scenes.WizardScene(
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}([./\-\s]\d{2,4})?$/;
 
     if (!dateRegex.test(rawDate)) {
-      const funnyDateErrors = [
-  '❌ Дата виглядає як рецепт бабусі, а не календар. Спробуй ще раз: 25.07.1995',
-  '📅 Я, звісно, бот, але таке навіть мене лякає. Спробуй формат: 25.07.1995',
-  '😅 Це не дата, це телепорт у паралельний вимір. Введи щось схоже на 1/1/95',
-  '🧐 Ні, це не дата. Це щось… дуже сміливе. Напиши, наприклад: 10-12-2000',
-  '🧠 Може кави ще раз? Бо ця дата не схожа на справжню. Введи щось схоже на 1/1/95',
-  '❌ Таку дату я навіть у серіалі "Темрява" не бачив. Спробуєш ще раз? Напиши, наприклад: 10-12-2000',
-  '⛔️ Ні-ні, я не можу це зберегти. Дата має бути схожа на 25.07.1995 або щось подібне.'
-];
-
-const randomError = funnyDateErrors[Math.floor(Math.random() * funnyDateErrors.length)];
-return ctx.reply(randomError);
-
+      const randomError = funnyDateErrors[Math.floor(Math.random() * funnyDateErrors.length)];
+      return ctx.reply(randomError);
     }
 
     const [day, month, yearPart] = rawDate.split(/[./\-\s]/);
@@ -68,12 +85,23 @@ return ctx.reply(randomError);
   async (ctx) => {
     const { date } = ctx.wizard.state;
 
+    const showSuccess = async (text) => {
+      const msgText = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+      const msg = await ctx.reply(msgText);
+      setTimeout(() => {
+        ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, text, {
+          reply_markup: mainMenuKeyboard.reply_markup
+        });
+      }, 1500);
+    };
+
     if (ctx.callbackQuery?.data === 'skip_note') {
       ctx.answerCbQuery();
       const reminders = loadUserReminders(ctx.from.id);
       reminders.push({ date, note: '' });
       saveUserReminders(ctx.from.id, reminders);
-      ctx.reply(`✅ Додано нагадування без нотатки на ${date}`);
+
+      await showSuccess(`✅ Додано нагадування без нотатки на ${date}`);
       return ctx.scene.leave();
     }
 
@@ -85,7 +113,8 @@ return ctx.reply(randomError);
     const reminders = loadUserReminders(ctx.from.id);
     reminders.push({ date, note });
     saveUserReminders(ctx.from.id, reminders);
-    ctx.reply(`✅ Додано нагадування: ${note || '(без нотатки)'} на ${date}`);
+
+    await showSuccess(`✅ Додано нагадування: ${note || '(без нотатки)'} на ${date}`);
     return ctx.scene.leave();
   }
 );
