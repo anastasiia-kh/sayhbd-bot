@@ -143,7 +143,10 @@ editReminder.on('text', async (ctx) => {
       return showMainMenu(ctx);
     } else if (text === '🏠 Головне меню') {
       await saveChanges(ctx);
-      return ctx.scene.leave();
+
+      // Після збереження показати меню замість видалення клавіатури
+      ctx.scene.state.editStep = 'menu';
+      return showMainMenu(ctx);
     } else {
       await ctx.reply('⚠️ Використовуй кнопки меню.');
     }
@@ -251,7 +254,11 @@ async function saveChanges(ctx) {
   reminders[reminderIndex] = ctx.scene.state.reminder;
   saveUserReminders(userId, reminders);
 
-  await ctx.reply('✅ Всі зміни збережено.', Markup.removeKeyboard());
+  // Показуємо повідомлення зі збереженими кнопками
+  await ctx.reply('✅ Всі зміни збережено.', Markup.keyboard([
+    '↩️ Повернутись в меню редагування',
+    '🏠 Головне меню'
+  ]).resize());
 }
 
 module.exports = editReminder;
