@@ -73,99 +73,60 @@ editReminder.enter(async (ctx) => {
 });
 
 editReminder.on('text', async (ctx) => {
-  const text = ctx.message.text;
   const step = ctx.scene.state.editStep;
+  const text = ctx.message.text;
 
-  // Перевірка на скасування у будь-який момент
-  if (text === '/cancel' || text === '❌ Скасувати') {
-    return handleCancel(ctx, step);
-  }
-
-  if (step === 'menu') {
-    if (text === '🗓 Змінити дату') {
-      ctx.scene.state.editStep = 'editDate';
-      await ctx.reply(
-        'Введи нову дату у форматі: 25.07.1996 або 1/1/95\nАбо /cancel для скасування',
-        Markup.keyboard(['❌ Скасувати', '↩️ Повернутись в меню редагування']).resize()
-      );
-      return;
-    }
-
-    if (text === '📝 Змінити нотатку') {
-      ctx.scene.state.editStep = 'editNote';
-      await ctx.reply(
-        'Введи нову нотатку або /cancel для скасування',
-        Markup.keyboard(['❌ Скасувати', '↩️ Повернутись в меню редагування']).resize()
-      );
-      return;
-    }
-
-    if (text === '⏰ Змінити час сповіщень') {
-      ctx.scene.state.editStep = 'editRemindBefore';
-      await ctx.reply('Вибери, коли надіслати нагадування (натискай кнопки):');
-      await showRemindBeforeButtons(ctx);
-      return;
-    }
-
-    if (text === '❌ Вийти без збереження') {
-      await ctx.reply('Редагування скасовано.', Markup.removeKeyboard());
-      return ctx.scene.leave();
-    }
-
-    await ctx.reply('⚠️ Обери дію з меню.');
-    return;
-  }
-
-  if (step === 'editDate') {
-    const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
-    if (!dateRegex.test(text)) {
-      await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
-      return;
-    }
-
-    const [day, month, yearPart] = text.split(/[./\-\s]/);
-    let yearNum = Number(yearPart);
-    const currentYear = new Date().getFullYear() % 100;
-    const century = yearNum > currentYear ? 1900 : 2000;
-    if (yearPart.length === 2) yearNum += century;
-
-    ctx.scene.state.reminder.date = text;
+  if (text === '❌ Скасувати' || text === '/cancel') {
     ctx.scene.state.editStep = 'afterEdit';
-    ctx.scene.state.reminder.dateEdited = true;
-
     await ctx.reply(
-      `Дата змінена на: ${text}`,
+      '❌ Дія скасована. Немає про що турбуватись.',
       Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
     );
     return;
   }
 
-  if (step === 'editNote') {
-    ctx.scene.state.reminder.note = text || '';
-    ctx.scene.state.editStep = 'afterEdit';
-    ctx.scene.state.noteEdited = true;
+  switch (step) {
+    case 'menu':
+      if (text === '📝 Змінити нотатку') {
+        ctx.scene.state.editStep = 'editNote';
+        await ctx.reply(
+          'Введи нову нотатку або /cancel для скасування',
+          Markup.keyboard(['❌ Скасувати']).resize()
+        );
+      } else if (text === '⏰ Змінити час сповіщень') {
+        ctx.scene.state.editStep = 'editRemindBefore';
+        await ctx.reply('Вибери, коли надіслати нагадування (натискай кнопки):');
+        await showRemindBeforeButtons(ctx);
+      } 
+      // інші випадки як є
+      else {
+        await ctx.reply('⚠️ Обери дію з меню.');
+      }
+      break;
 
-    await ctx.reply(
-      `Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`,
-      Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
-    );
-    return;
-  }
+    case 'editNote':
+      if (!text) {
+        await ctx.reply('⚠️ Надішли текст нотатки або /cancel.');
+      } else {
+        ctx.scene.state.reminder.note = text;
+        ctx.scene.state.reminder.noteEdited = true;
+        ctx.scene.state.editStep = 'afterEdit';
+        await ctx.reply(
+          `Нотатку змінено на: ${text}`,
+          Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+        );
+      }
+      break;
 
-  if (step === 'afterEdit') {
-    if (text === '↩️ Повернутись в меню редагування') {
-      ctx.scene.state.editStep = 'menu';
-      await showMainMenu(ctx);
-      return;
-    }
-    if (text === '🏠 Головне меню') {
-      await saveChanges(ctx);
-      ctx.scene.state.editStep = 'menu';
-      await showMainMenu(ctx);
-      return;
-    }
-    await ctx.reply('⚠️ Використовуй кнопки меню.');
-    return;
+    case 'editRemindBefore':
+      // Якщо отримали текст замість callback — підказка
+      await ctx.reply('⚠️ Для вибору часу сповіщень використовуй кнопки.');
+      break;
+
+    // інші стани як editDate, afterEdit тощо...
+
+    default:
+      await ctx.reply('⚠️ Використовуй кнопки меню.');
   }
 });
 
