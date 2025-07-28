@@ -1,6 +1,8 @@
 const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
+editReminder.use(restrictUser);
+
 
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {

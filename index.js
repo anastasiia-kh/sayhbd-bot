@@ -5,6 +5,12 @@ const path = require('path');
 const cron = require('node-cron');
 const { v4: uuidv4 } = require('uuid');
 
+const authMiddleware = require('./auth');
+const YOUR_USER_ID = 438623792; // твій Telegram ID
+
+// Додаємо middleware, що пропускає запити тільки від твого ID
+bot.use(authMiddleware(YOUR_USER_ID));
+// Далі підключення сцен, файлів тощо
 const addReminderScene = require('./addReminderScene');
 const editReminderScene = require('./editReminderScene');
 const { loadUserReminders, saveUserReminders } = require('./userStorage');
