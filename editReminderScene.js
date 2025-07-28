@@ -2,7 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = './data'; // Твоя папка з даними
+const dataDir = './data'; // Папка з даними
 const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
 
 const loadReminders = (userId) =>
@@ -16,7 +16,7 @@ const saveReminders = (userId, data) =>
 const editReminder = new Scenes.WizardScene(
   'editReminder',
 
-  // Крок 0 - Меню редагування (без кнопки "Зберегти й вийти")
+  // Крок 0 - меню редагування, без кнопки "Зберегти й вийти"
   async (ctx) => {
     const reminders = ctx.scene.state.allReminders || loadReminders(ctx.from.id);
     const editId = ctx.scene.state.editId;
@@ -31,42 +31,30 @@ const editReminder = new Scenes.WizardScene(
     ctx.scene.state.selectedRemindBefore = new Set(reminder.remindBefore || []);
     ctx.scene.state.editing = null;
 
-    // Меню без "Зберегти й вийти"
-    const buttons = [];
-    if (ctx.scene.state.editing !== 'date') buttons.push('🗓 Змінити дату');
-    if (ctx.scene.state.editing !== 'note') buttons.push('📝 Змінити нотатку');
-    if (ctx.scene.state.editing !== 'remindBefore') buttons.push('⏰ Змінити нагадування (дні)');
-    buttons.push('❌ Скасувати');
-
-    await ctx.reply(
-      `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nЩо хочеш змінити?`,
-      Markup.keyboard(buttons).resize()
-    );
-
-    return;
+    await showEditMenu(ctx);
   },
 
-  // Крок 1 - Обробка вибору
+  // Крок 1 - обробка вибору меню
   async (ctx) => {
     const text = ctx.message?.text;
-    if (!text) {
-      await ctx.reply('⚠️ Будь ласка, обери дію з меню.');
-      return;
-    }
+    if (!text) return ctx.reply('⚠️ Будь ласка, обери дію з меню.');
 
-    if (text === '❌ Скасувати') {
+    if (text === '❌ Вийти без збереження') {
       await ctx.reply('Редагування скасовано.', Markup.removeKeyboard());
       return ctx.scene.leave();
     }
 
-    if (text === '💾 Зберегти й вийти') {
-      await saveChanges(ctx);
-      return ctx.scene.leave();
+    if (text === '✅ Зберегти і вийти') {
+      await askSaveConfirm(ctx);
+      return;
     }
 
     if (text === '🗓 Змінити дату') {
       ctx.scene.state.editing = 'date';
-      await ctx.reply('Введи нову дату у форматі: 25.07.1996 або 1/1/95 або /cancel для скасування', Markup.removeKeyboard());
+      await ctx.reply(
+        'Введи нову дату у форматі: 25.07.1996 або 1/1/95\nАбо /cancel для скасування',
+        Markup.removeKeyboard()
+      );
       return ctx.wizard.next();
     }
 
@@ -85,14 +73,14 @@ const editReminder = new Scenes.WizardScene(
     await ctx.reply('⚠️ Обери одну з доступних опцій.');
   },
 
-  // Крок 2 - Введення дати або нотатки
+  // Крок 2 - введення дати або нотатки
   async (ctx) => {
     const text = ctx.message?.text;
 
     if (text === '/cancel') {
       ctx.scene.state.editing = null;
       await ctx.reply('Редагування скасовано. Повертаємось у меню редагування.', Markup.removeKeyboard());
-      await editReminder.steps[0](ctx);
+      await showEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
 
@@ -128,7 +116,7 @@ const editReminder = new Scenes.WizardScene(
       ctx.scene.state.reminder.date = rawDate;
       ctx.scene.state.editing = null;
       await ctx.reply(`Дата змінена на: ${rawDate}`);
-      await editReminder.steps[0](ctx);
+      await showEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
 
@@ -137,12 +125,12 @@ const editReminder = new Scenes.WizardScene(
       ctx.scene.state.reminder.note = note || '';
       ctx.scene.state.editing = null;
       await ctx.reply(`Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`);
-      await editReminder.steps[0](ctx);
+      await showEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
   },
 
-  // Крок 3 - Редагування remindBefore
+  // Крок 3 - редагування remindBefore (інлайн кнопки)
   async (ctx) => {
     const data = ctx.callbackQuery?.data;
     if (!data) return;
@@ -150,7 +138,7 @@ const editReminder = new Scenes.WizardScene(
     if (data === 'skip_remind') {
       ctx.scene.state.selectedRemindBefore.clear();
       await ctx.reply('Нагадування пропущено.');
-      await editReminder.steps[0](ctx);
+      await showEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
 
@@ -173,19 +161,57 @@ const editReminder = new Scenes.WizardScene(
       ctx.scene.state.reminder.remindBefore = Array.from(ctx.scene.state.selectedRemindBefore).sort((a,b) => a-b);
       ctx.scene.state.editing = null;
       await ctx.reply('🔖 Нагадування оновлено.');
-      await editReminder.steps[0](ctx);
+      await showEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
 
     if (data === 'cancel_edit') {
       ctx.scene.state.editing = null;
       await ctx.reply('Редагування скасовано.');
-      await editReminder.steps[0](ctx);
+      await showEditMenu(ctx);
+      return ctx.wizard.selectStep(1);
+    }
+  },
+
+  // Крок 4 - підтвердження збереження
+  async (ctx) => {
+    const data = ctx.callbackQuery?.data;
+    if (!data) return;
+
+    if (data === 'confirm_save') {
+      await saveChanges(ctx);
+      return ctx.scene.leave();
+    }
+
+    if (data === 'cancel_save') {
+      await ctx.reply('Повертаємось до редагування.', Markup.removeKeyboard());
+      await showEditMenu(ctx);
       return ctx.wizard.selectStep(1);
     }
   }
 );
 
+// Функція для відображення меню редагування з позначками ✔️
+async function showEditMenu(ctx) {
+  const editing = ctx.scene.state.editing;
+  const reminder = ctx.scene.state.reminder;
+
+  const buttons = [];
+
+  if (editing !== 'date') buttons.push(`🗓 Змінити дату${reminder.dateEdited ? ' ✔️' : ''}`);
+  if (editing !== 'note') buttons.push(`📝 Змінити нотатку${reminder.noteEdited ? ' ✔️' : ''}`);
+  if (editing !== 'remindBefore') buttons.push(`⏰ Змінити нагадування (дні)${reminder.remindBeforeEdited ? ' ✔️' : ''}`);
+
+  buttons.push('✅ Зберегти і вийти');
+  buttons.push('❌ Вийти без збереження');
+
+  await ctx.reply(
+    `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nЩо хочеш змінити?`,
+    Markup.keyboard(buttons).resize()
+  );
+}
+
+// Функція для показу кнопок remindBefore
 async function showRemindBeforeButtons(ctx) {
   const selected = ctx.scene.state.selectedRemindBefore;
 
@@ -216,6 +242,18 @@ async function showRemindBeforeButtons(ctx) {
   }
 }
 
+// Функція для підтвердження збереження змін
+async function askSaveConfirm(ctx) {
+  await ctx.reply(
+    'Впевнений, що хочеш зберегти всі зміни?',
+    Markup.inlineKeyboard([
+      Markup.button.callback('Так', 'confirm_save'),
+      Markup.button.callback('Ні', 'cancel_save'),
+    ])
+  );
+}
+
+// Функція для збереження змін
 async function saveChanges(ctx) {
   const userId = ctx.from.id;
   const reminders = loadReminders(userId);
