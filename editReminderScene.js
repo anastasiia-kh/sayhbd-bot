@@ -61,9 +61,24 @@ const editReminder = new Scenes.WizardScene(
         break;
 
       case '⏰ Змінити нагадування (дні)':
-        ctx.scene.state.step = 'editRemindBefore';
-        await showRemindBeforeButtons(ctx);
-        break;
+  ctx.scene.state.step = 'editRemindBefore';
+  if (ctx.callbackQuery) {
+    await showRemindBeforeButtons(ctx);
+  } else {
+    // Якщо це текстове повідомлення, відправляємо нове повідомлення з кнопками
+    await ctx.reply(
+      `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
+      Markup.inlineKeyboard([
+        [0,1,3,7].map(d => Markup.button.callback(ctx.scene.state.selectedRemindBefore.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)),
+        [
+          Markup.button.callback('💾 Зберегти', 'save_edit'),
+          Markup.button.callback('❌ Скасувати', 'cancel_edit')
+        ]
+      ])
+    );
+  }
+  break;
+
 
       case '💾 Зберегти й вийти':
         await saveChanges(ctx);
@@ -176,6 +191,22 @@ function mainMenuKeyboard() {
 
 async function showRemindBeforeButtons(ctx) {
   const selected = ctx.scene.state.selectedRemindBefore;
+
+  if (!ctx.callbackQuery) {
+    // Відправляємо нове повідомлення з кнопками
+    return ctx.reply(
+      `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
+      Markup.inlineKeyboard([
+        [0,1,3,7].map(d => Markup.button.callback(selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)),
+        [
+          Markup.button.callback('💾 Зберегти', 'save_edit'),
+          Markup.button.callback('❌ Скасувати', 'cancel_edit')
+        ]
+      ])
+    );
+  }
+
+  // Якщо це callbackQuery — редагуємо наявне повідомлення
   await ctx.editMessageText(
     `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
     Markup.inlineKeyboard([
@@ -187,6 +218,7 @@ async function showRemindBeforeButtons(ctx) {
     ])
   );
 }
+
 
 async function saveChanges(ctx) {
   const userId = ctx.from.id;
