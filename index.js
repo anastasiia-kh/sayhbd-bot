@@ -122,13 +122,14 @@ bot.on('callback_query', async (ctx) => {
    console.log('Callback data:', data);
   console.log('Reminders:', reminders);
 
- if (data.startsWith('edit_')) {
+if (data.startsWith('edit_')) {
   const id = data.split('_')[1];
+  const reminders = loadUserReminders(userId);
   const reminderIndex = reminders.findIndex(r => r.id === id);
 
   if (reminderIndex !== -1) {
     ctx.scene.state = {
-      editId: id,   // <-- тепер передаємо у стан id, а не індекс
+      editId: id,              // ТУТ має бути id, а не індекс
       allReminders: reminders
     };
     return ctx.scene.enter('editReminder');
@@ -136,6 +137,7 @@ bot.on('callback_query', async (ctx) => {
     return ctx.reply('⚠️ Це нагадування вже не існує.');
   }
 }
+
 
 
   if (data.startsWith('delete_')) {

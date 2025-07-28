@@ -19,6 +19,9 @@ editReminder.enter((ctx) => {
   const userId = ctx.from.id;
   const reminders = ctx.scene.state.allReminders || loadReminders(userId);
   const editId = ctx.scene.state.editId;          // тепер зберігаємо id
+
+  console.log('editId:', editId);
+console.log('allReminders:', reminders);
   const reminder = reminders.find(r => r.id === editId);  // шукаємо по id
 
   if (!reminder) {
