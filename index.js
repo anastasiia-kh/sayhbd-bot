@@ -70,17 +70,48 @@ bot.hears('📋 Список нагадувань', (ctx) => {
     return ctx.reply('Наразі у тебе немає жодного нагадування.');
   }
 
-  const list = reminders
-    .map((r, i) => {
-      const remindText = r.remindBefore?.length
-        ? `⏱ [${r.remindBefore.join(', ')} дн.]`
-        : '';
-      return `#${i + 1} — ${r.date}${r.note ? ` — ${r.note}` : ''} ${remindText}`;
-    })
-    .join('\n');
+  reminders.forEach((r, i) => {
+    const remindText = r.remindBefore?.length
+      ? `⏱ [${r.remindBefore.join(', ')} дн.]`
+      : '';
+    const text = `#${i + 1} — ${r.date}${r.note ? ` — ${r.note}` : ''} ${remindText}`;
 
-  ctx.reply(`Ось твої нагадування:\n\n${list}`);
+    ctx.reply(text, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✏️ Редагувати', callback_data: `edit_${i}` },
+            { text: '🗑 Видалити', callback_data: `delete_${i}` }
+          ]
+        ]
+      }
+    });
+  });
 });
+
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  const userId = ctx.from.id;
+  const reminders = loadUserReminders(userId);
+
+  if (data.startsWith('edit_')) {
+    const index = parseInt(data.split('_')[1]);
+    if (reminders[index]) {
+      ctx.scene.state = { editIndex: index }; // передаємо індекс у сцену
+      return ctx.scene.enter('editReminder');
+    }
+  }
+
+  if (data.startsWith('delete_')) {
+    const index = parseInt(data.split('_')[1]);
+    if (reminders[index]) {
+      reminders.splice(index, 1);
+      saveReminders(userId, reminders);
+      return ctx.reply('🗑 Нагадування видалено.');
+    }
+  }
+});
+
 
 bot.hears('ℹ️ Допомога', (ctx) => {
   ctx.reply(

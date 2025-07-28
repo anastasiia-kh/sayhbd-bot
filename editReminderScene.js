@@ -11,19 +11,75 @@ const loadReminders = (userId) =>
 const saveReminders = (userId, data) =>
   fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
 
-const feedbacks = {
-  0: ['🎉 У сам день — святкуємо разом!', '🎂 Прямо в день події — шикарно!'],
-  1: ['⏳ За день? Ідеальний таймінг!', '📌 Гарно! Є ще доба на підготовку.'],
-  3: ['🧠 За 3 дні — ідея генія!', '🔮 Прогнозовано і точно.'],
-  7: ['📅 За тиждень? Так тримати!', '🛎 Це стратегічно.']
-};
-
 const editReminder = new Scenes.BaseScene('editReminder');
 
+// Вхід у сцену редагування
+editReminder.enter((ctx) => {
+  const userId = ctx.from.id;
+  const reminders = loadReminders(userId);
+  const index = ctx.scene.state.editIndex;
+  const reminder = reminders[index];
+
+  if (!reminder) {
+    ctx.reply('⚠️ Не вдалося знайти нагадування.');
+    return ctx.scene.leave();
+  }
+
+  ctx.scene.state.current = reminder;
+  ctx.scene.state.selected = new Set(reminder.remindBefore || []);
+
+  ctx.reply(
+    `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nОберіть, коли нагадати:`,
+    Markup.inlineKeyboard([
+      [0, 1, 3, 7].map((d) => ({
+        text: ctx.scene.state.selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`,
+        callback_data: `toggle_${d}`
+      })),
+      [
+        { text: '💾 Зберегти', callback_data: 'save_edit' },
+        { text: '❌ Скасувати', callback_data: 'cancel_edit' }
+      ]
+    ])
+  );
+});
+
+// Обробка натискань кнопок
 editReminder.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
 
+  if (data.startsWith('toggle_')) {
+    const day = parseInt(data.split('_')[1]);
+    const selected = ctx.scene.state.selected;
+
+    if (selected.has(day)) {
+      selected.delete(day);
+    } else {
+      selected.add(day);
+    }
+
+    // Оновлення кнопок
+    ctx.editMessageReplyMarkup({
+      inline_keyboard: [
+        [0, 1, 3, 7].map((d) => ({
+          text: selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`,
+          callback_data: `toggle_${d}`
+        })),
+        [
+          { text: '💾 Зберегти', callback_data: 'save_edit' },
+          { text: '❌ Скасувати', callback_data: 'cancel_edit' }
+        ]
+      ]
+    });
+    return;
+  }
+
   if (data === 'save_edit') {
+    const userId = ctx.from.id;
+    const index = ctx.scene.state.editIndex;
+    const reminders = loadReminders(userId);
+    reminders[index].remindBefore = [...ctx.scene.state.selected].sort((a, b) => a - b);
+    saveReminders(userId, reminders);
+
     const successMessages = [
       '✅ Нагадування оновлено! Я пишаюсь тобою! 😎',
       '🎉 Ідеально! Тепер не забудеш навіть через 7 днів!',
