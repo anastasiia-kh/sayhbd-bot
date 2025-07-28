@@ -1,18 +1,21 @@
 const fs = require('fs');
 const path = require('path');
 
-// Папка для збереження даних
 const storageDir = path.join(__dirname, 'data');
+
+// Перевіряємо, чи існує папка 'data', якщо ні — створюємо
 if (!fs.existsSync(storageDir)) {
   fs.mkdirSync(storageDir, { recursive: true });
+  console.log('Папка "data" була створена автоматично');
+} else {
+  console.log('Папка "data" існує');
 }
 
-// Повний шлях до файлу користувача
+// Далі можна експортувати функції роботи з файлами
 function getUserFilePath(userId) {
   return path.join(storageDir, `${userId}.json`);
 }
 
-// Завантаження нагадувань
 function loadUserReminders(userId) {
   const file = getUserFilePath(userId);
   if (!fs.existsSync(file)) return [];
@@ -26,7 +29,6 @@ function loadUserReminders(userId) {
   }
 }
 
-// Збереження нагадувань
 function saveUserReminders(userId, reminders) {
   const file = getUserFilePath(userId);
   try {
@@ -38,5 +40,5 @@ function saveUserReminders(userId, reminders) {
 
 module.exports = {
   loadUserReminders,
-  saveUserReminders
+  saveUserReminders,
 };
