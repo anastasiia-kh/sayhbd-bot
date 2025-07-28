@@ -1,3 +1,20 @@
+const { Scenes, Markup } = require('telegraf');
+const { v4: uuidv4 } = require('uuid');
+const { loadUserReminders, saveUserReminders } = require('./userStorage');
+
+const reminderOptions = [
+  { label: 'У день події', value: 0 },
+  { label: 'За 1 день', value: 1 },
+  { label: 'За 3 дні', value: 3 },
+  { label: 'За 7 днів', value: 7 }
+];
+
+const mainMenuKeyboard = Markup.keyboard([
+  ['➕ Додати нагадування'],
+  ['📋 Список нагадувань'],
+  ['ℹ️ Допомога']
+]).resize();
+
 const addReminder = new Scenes.WizardScene(
   'addReminder',
 
@@ -14,7 +31,7 @@ const addReminder = new Scenes.WizardScene(
     }
 
     const rawDate = ctx.message.text.trim();
-    const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}([./\-\s]\d{2,4})?$/;
+    const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
 
     if (!dateRegex.test(rawDate)) {
       return ctx.reply('❌ Невірна дата. Приклад: 25.07.1995');
@@ -22,13 +39,10 @@ const addReminder = new Scenes.WizardScene(
 
     const [day, month, yearPart] = rawDate.split(/[./\-\s]/);
 
-    if (!yearPart) {
-      return ctx.reply('❌ Будь ласка, вкажи повну дату з роком, наприклад: 25.07.1995');
-    }
+    const dayNum = Number(day);
+    const monthNum = Number(month);
+    let yearNum = Number(yearPart);
 
-    const dayNum = parseInt(day);
-    const monthNum = parseInt(month);
-    let yearNum = parseInt(yearPart);
     if (yearPart.length === 2) {
       const currentYear = new Date().getFullYear() % 100;
       const century = yearNum > currentYear ? 1900 : 2000;
@@ -36,6 +50,7 @@ const addReminder = new Scenes.WizardScene(
     }
 
     const dateObj = new Date(yearNum, monthNum - 1, dayNum);
+
     if (
       dateObj.getDate() !== dayNum ||
       dateObj.getMonth() + 1 !== monthNum ||
@@ -47,9 +62,7 @@ const addReminder = new Scenes.WizardScene(
     ctx.wizard.state.date = rawDate;
     await ctx.reply(
       '📝 Введи нотатку (імʼя, подія, тощо)',
-      Markup.inlineKeyboard([
-        [Markup.button.callback('⏭ Пропустити', 'skip_note')]
-      ])
+      Markup.inlineKeyboard([[Markup.button.callback('⏭ Пропустити', 'skip_note')]])
     );
     return ctx.wizard.next();
   },
@@ -89,7 +102,7 @@ const addReminder = new Scenes.WizardScene(
     if (!data) return;
 
     if (data.startsWith('toggle_')) {
-      const value = parseInt(data.replace('toggle_', ''));
+      const value = Number(data.replace('toggle_', ''));
       const idx = state.remindBefore.indexOf(value);
       if (idx === -1) {
         state.remindBefore.push(value);
@@ -115,7 +128,7 @@ const addReminder = new Scenes.WizardScene(
       const newReminder = {
         id: uuidv4(),
         date: state.date,
-        note: state.note,
+        note: state.note || '',
         remindBefore: [...state.remindBefore].sort((a,b) => a-b)
       };
 
@@ -124,7 +137,7 @@ const addReminder = new Scenes.WizardScene(
 
       console.log('Додано нове нагадування:', newReminder);
 
-      ctx.wizard.state = {};  // скидаємо стан
+      ctx.wizard.state = {}; // очищаємо стан
 
       await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
       return ctx.scene.leave();
