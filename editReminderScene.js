@@ -176,6 +176,7 @@ editReminder.on('callback_query', async (ctx) => {
 
   if (data === 'save_edit') {
     ctx.scene.state.reminder.remindBefore = Array.from(selected).sort((a, b) => a - b);
+    ctx.scene.state.remindBeforeEdited = true;
     ctx.scene.state.editStep = 'afterEdit';
     await ctx.answerCbQuery('Нагадування оновлено.');
     await ctx.reply('Нагадування оновлено.', Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize());
@@ -206,19 +207,35 @@ async function showMainMenu(ctx) {
 
 async function showRemindBeforeButtons(ctx) {
   const selected = ctx.scene.state.selectedRemindBefore;
-  await ctx.editMessageText(
-    'Оберіть, коли надіслати нагадування (натискай щоб додати/видалити):',
-    Markup.inlineKeyboard([
-      [0, 1, 3, 7].map((d) =>
-        Markup.button.callback(selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)
-      ),
-      [
-        Markup.button.callback('❎ Пропустити', 'skip_remind'),
-        Markup.button.callback('💾 Зберегти', 'save_edit'),
-        Markup.button.callback('❌ Скасувати', 'cancel_edit')
-      ]
-    ])
-  );
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(
+      'Оберіть, коли надіслати нагадування (натискай щоб додати/видалити):',
+      Markup.inlineKeyboard([
+        [0, 1, 3, 7].map((d) =>
+          Markup.button.callback(selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)
+        ),
+        [
+          Markup.button.callback('❎ Пропустити', 'skip_remind'),
+          Markup.button.callback('💾 Зберегти', 'save_edit'),
+          Markup.button.callback('❌ Скасувати', 'cancel_edit')
+        ]
+      ])
+    );
+  } else {
+    await ctx.reply(
+      'Оберіть, коли надіслати нагадування (натискай щоб додати/видалити):',
+      Markup.inlineKeyboard([
+        [0, 1, 3, 7].map((d) =>
+          Markup.button.callback(selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)
+        ),
+        [
+          Markup.button.callback('❎ Пропустити', 'skip_remind'),
+          Markup.button.callback('💾 Зберегти', 'save_edit'),
+          Markup.button.callback('❌ Скасувати', 'cancel_edit')
+        ]
+      ])
+    );
+  }
 }
 
 async function saveChanges(ctx) {
