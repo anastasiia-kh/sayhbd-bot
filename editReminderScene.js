@@ -61,14 +61,9 @@ editReminder.on('text', async (ctx) => {
   const step = ctx.scene.state.editStep;
   const text = ctx.message.text;
 
-  // Обробка скасування на будь-якому кроці
+  // Загальна обробка скасування будь-де
   if (text === '❌ Скасувати' || text === '/cancel') {
-    ctx.scene.state.editStep = 'afterEdit';
-    await ctx.reply(
-      '❌ Дія скасована. Немає про що турбуватись.',
-      Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
-    );
-    return;
+    return handleCancel(ctx, step);
   }
 
   switch (step) {
@@ -98,15 +93,14 @@ editReminder.on('text', async (ctx) => {
         return;
       }
 
-     if (text === '❌ Вийти без збереження') {
-  ctx.scene.state.editStep = 'afterEdit'; // щоб не плутало логіку
-  await ctx.reply(
-    'Готово, ми на головній панелі.',
-    Markup.keyboard(['➕ Додати нагадування', '📋 Список нагадувань', 'ℹ️ Допомога']).resize()
-  );
-  return ctx.scene.leave();
-}
-
+      if (text === '❌ Вийти без збереження') {
+        ctx.scene.state.editStep = 'afterEdit';
+        await ctx.reply(
+          'Готово, ми на головній панелі.',
+          Markup.keyboard(['➕ Додати нагадування', '📋 Список нагадувань', 'ℹ️ Допомога']).resize()
+        );
+        return ctx.scene.leave();
+      }
 
       await ctx.reply('⚠️ Обери дію з меню.');
       return;
@@ -150,7 +144,7 @@ editReminder.on('text', async (ctx) => {
       }
 
     case 'editRemindBefore':
-      // Якщо користувач надіслав текст замість натискання кнопок
+      // Якщо отримали текст замість callback — підказка
       await ctx.reply('⚠️ Для вибору часу сповіщень використовуй кнопки.');
       return;
 
@@ -169,7 +163,7 @@ editReminder.on('text', async (ctx) => {
             ['ℹ️ Допомога']
           ]).resize()
         );
-        ctx.scene.state.editStep = null; // або ctx.scene.leave()
+        ctx.scene.state.editStep = null;
         return;
       }
       await ctx.reply('⚠️ Використовуй кнопки меню.');
@@ -227,7 +221,7 @@ editReminder.on('callback_query', async (ctx) => {
   }
 });
 
-// Допоміжна функція для обробки скасування (callback)
+// Обробка скасування (callback)
 async function handleCancel(ctx, step) {
   let cancelMessage = '❌ Дія скасована. Немає про що турбуватись.';
   if (step === 'editDate') cancelMessage = '❌ Скасовано редагування дати.';
