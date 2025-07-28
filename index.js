@@ -3,10 +3,11 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
+const { v4: uuidv4 } = require('uuid');
+
 const addReminderScene = require('./addReminderScene');
 const editReminderScene = require('./editReminderScene');
 const { loadUserReminders, saveUserReminders } = require('./userStorage');
-
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const stage = new Scenes.Stage([addReminderScene, editReminderScene]);
@@ -56,6 +57,24 @@ function calculateAge(dateStr) {
   return age > 0 ? ` — виповнюється ${age} 🎉` : '';
 }
 
+function ensureRemindersHaveIds(userId) {
+  const reminders = loadUserReminders(userId);
+  let updated = false;
+
+  reminders.forEach((r) => {
+    if (!r.id) {
+      r.id = uuidv4();
+      updated = true;
+    }
+  });
+
+  if (updated) {
+    saveUserReminders(userId, reminders);
+  }
+
+  return reminders;
+}
+
 bot.start((ctx) => {
   ctx.reply(
     'Привіт! Я нагадаю про важливі дати 🎉\n\n➕ Додай нагадування, обери коли саме нагадати (за кілька днів або в сам день), і я не дам забути!',
@@ -65,10 +84,8 @@ bot.start((ctx) => {
 
 bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 
-const { v4: uuidv4 } = require('uuid'); // у верхній частині файлу
-
 bot.hears('📋 Список нагадувань', (ctx) => {
-  const reminders = loadUserReminders(ctx.from.id);
+  const reminders = ensureRemindersHaveIds(ctx.from.id);
   if (!reminders.length) {
     return ctx.reply('Наразі у тебе немає жодного нагадування.');
   }
@@ -78,9 +95,6 @@ bot.hears('📋 Список нагадувань', (ctx) => {
       ? `⏱ [${r.remindBefore.join(', ')} дн.]`
       : '';
     const text = `${r.date}${r.note ? ` — ${r.note}` : ''} ${remindText}`;
-
-    // Якщо нагадування не має id — додамо (можна також додати при створенні)
-    if (!r.id) r.id = uuidv4();
 
     ctx.reply(text, {
       reply_markup: {
@@ -94,7 +108,6 @@ bot.hears('📋 Список нагадувань', (ctx) => {
     });
   });
 });
-
 
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
@@ -130,7 +143,6 @@ bot.on('callback_query', async (ctx) => {
   }
 });
 
-
 bot.hears('ℹ️ Допомога', (ctx) => {
   ctx.reply(
     `ℹ️ Я бот для нагадувань про дні народження (і не тільки).
@@ -153,29 +165,7 @@ cron.schedule('* * * * *', () => {
 
   users.forEach((userFile) => {
     const userId = userFile.replace('.json', '');
-const reminders = ensureRemindersHaveIds(userId);
-
-const { v4: uuidv4 } = require('uuid');
-const { loadUserReminders, saveUserReminders } = require('./userStorage');
-
-function ensureRemindersHaveIds(userId) {
-  const reminders = loadUserReminders(userId);
-  let updated = false;
-
-  reminders.forEach((r) => {
-    if (!r.id) {
-      r.id = uuidv4();
-      updated = true;
-    }
-  });
-
-  if (updated) {
-    saveUserReminders(userId, reminders);
-  }
-
-  return reminders;
-}
-
+    const reminders = ensureRemindersHaveIds(userId);
 
     reminders.forEach((r) => {
       if (!r.date || !Array.isArray(r.remindBefore)) return;
