@@ -88,10 +88,9 @@ const addReminder = new Scenes.WizardScene(
     const showSuccess = async (text) => {
       const msgText = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
       const msg = await ctx.reply(msgText);
-      setTimeout(() => {
-        ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, text, {
-          reply_markup: mainMenuKeyboard.reply_markup
-        });
+      setTimeout(async () => {
+        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, text);
+        await ctx.reply('🔽 Головне меню:', mainMenuKeyboard);
       }, 1500);
     };
 
