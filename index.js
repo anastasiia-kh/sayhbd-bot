@@ -95,12 +95,15 @@ bot.on('callback_query', async (ctx) => {
   const reminders = loadUserReminders(userId);
 
   if (data.startsWith('edit_')) {
-    const index = parseInt(data.split('_')[1]);
-    if (reminders[index]) {
-      ctx.scene.state = { editIndex: index }; // передаємо індекс у сцену
-      return ctx.scene.enter('editReminder');
-    }
+  const index = parseInt(data.split('_')[1]);
+  if (reminders[index]) {
+    ctx.scene.state = {
+      editIndex: index,
+      allReminders: reminders // нове
+    };
+    return ctx.scene.enter('editReminder');
   }
+}
 
   if (data.startsWith('delete_')) {
     const index = parseInt(data.split('_')[1]);

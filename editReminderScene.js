@@ -16,7 +16,7 @@ const editReminder = new Scenes.BaseScene('editReminder');
 // Вхід у сцену редагування
 editReminder.enter((ctx) => {
   const userId = ctx.from.id;
-  const reminders = loadReminders(userId);
+  const reminders = ctx.scene.state.allReminders || loadReminders(userId);
   const index = ctx.scene.state.editIndex;
   const reminder = reminders[index];
 
