@@ -93,18 +93,21 @@ editReminder.on('text', async (ctx) => {
     }
 
     await ctx.reply('⚠️ Обери дію з меню.');
+    return;
   } 
+  
   else if (step === 'editDate') {
     if (text === '/cancel') {
       ctx.scene.state.editStep = 'menu';
       await ctx.reply('Редагування дати скасовано.');
       await showMainMenu(ctx);
-      return; // <-- додано для зупинки подальшої обробки
+      return; // <-- важливо!
     }
 
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
     if (!dateRegex.test(text)) {
-      return ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
+      await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
+      return; // <-- важливо!
     }
 
     const [day, month, yearPart] = text.split(/[./\-\s]/);
@@ -121,13 +124,15 @@ editReminder.on('text', async (ctx) => {
       `Дата змінена на: ${text}`,
       Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
     );
+    return;
   } 
+  
   else if (step === 'editNote') {
     if (text === '/cancel') {
       ctx.scene.state.editStep = 'menu';
       await ctx.reply('Редагування нотатки скасовано.');
       await showMainMenu(ctx);
-      return; // <-- додано для зупинки подальшої обробки
+      return; // <-- важливо!
     }
 
     ctx.scene.state.reminder.note = text || '';
@@ -138,19 +143,24 @@ editReminder.on('text', async (ctx) => {
       `Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`,
       Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
     );
+    return;
   } 
+  
   else if (step === 'afterEdit') {
     if (text === '↩️ Повернутись в меню редагування') {
       ctx.scene.state.editStep = 'menu';
-      return showMainMenu(ctx);
+      await showMainMenu(ctx);
+      return;
     } else if (text === '🏠 Головне меню') {
       await saveChanges(ctx);
 
       // Після збереження показати меню замість видалення клавіатури
       ctx.scene.state.editStep = 'menu';
-      return showMainMenu(ctx);
+      await showMainMenu(ctx);
+      return;
     } else {
       await ctx.reply('⚠️ Використовуй кнопки меню.');
+      return;
     }
   }
 });
@@ -192,6 +202,7 @@ editReminder.on('callback_query', async (ctx) => {
     ctx.scene.state.editStep = 'menu';
     await ctx.answerCbQuery('Редагування скасовано.');
     await showMainMenu(ctx);
+    return;
   }
 });
 
