@@ -96,11 +96,11 @@ editReminder.on('text', async (ctx) => {
   } 
   else if (step === 'editDate') {
     if (text === '/cancel') {
-  ctx.scene.state.editStep = 'menu';
-  await ctx.reply('Редагування дати скасовано.');
-  return showMainMenu(ctx);
-}
-
+      ctx.scene.state.editStep = 'menu';
+      await ctx.reply('Редагування дати скасовано.');
+      await showMainMenu(ctx);
+      return; // <-- додано для зупинки подальшої обробки
+    }
 
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
     if (!dateRegex.test(text)) {
@@ -124,11 +124,11 @@ editReminder.on('text', async (ctx) => {
   } 
   else if (step === 'editNote') {
     if (text === '/cancel') {
-  ctx.scene.state.editStep = 'menu';
-  await ctx.reply('Редагування нотатки скасовано.');
-  return showMainMenu(ctx);
-}
-
+      ctx.scene.state.editStep = 'menu';
+      await ctx.reply('Редагування нотатки скасовано.');
+      await showMainMenu(ctx);
+      return; // <-- додано для зупинки подальшої обробки
+    }
 
     ctx.scene.state.reminder.note = text || '';
     ctx.scene.state.editStep = 'afterEdit';
