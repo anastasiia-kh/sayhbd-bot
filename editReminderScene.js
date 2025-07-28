@@ -1,56 +1,97 @@
 const { Scenes, Markup } = require('telegraf');
-const fs = require('fs');
-const path = require('path');
+const { loadUserReminders, saveUserReminders } = require('./userStorage');
 
-const dataDir = './userData';
-const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
-const loadReminders = (userId) => {
-  const file = getUserFilePath(userId);
-  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : [];
-};
-const saveReminders = (userId, data) => {
-  fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
-};
-
-const editReminderScene = new Scenes.WizardScene(
+const editReminder = new Scenes.WizardScene(
   'editReminder',
+
   (ctx) => {
-    ctx.wizard.state.reminders = loadReminders(ctx.from.id);
+    const reminders = loadUserReminders(ctx.from.id);
     const index = ctx.session.editingIndex;
-    if (!ctx.wizard.state.reminders[index]) {
-      ctx.reply('❌ Нагадування не знайдено.');
+
+    if (!reminders[index]) {
+      ctx.reply('⚠️ Нагадування не знайдено.');
       return ctx.scene.leave();
     }
-    ctx.reply('✏️ Введи нову дату (наприклад, 25.07.1995):');
+
+    ctx.session.reminders = reminders;
+
+    ctx.reply(
+      '✏️ Введи нову дату (наприклад, 25.07.1995):',
+      Markup.inlineKeyboard([
+        [Markup.button.callback('⏭ Пропустити', 'skip_date')],
+        [Markup.button.callback('❌ Скасувати', 'cancel_edit')]
+      ])
+    );
     return ctx.wizard.next();
   },
-  (ctx) => {
-    const date = ctx.message.text.trim();
-    ctx.wizard.state.newDate = date;
-    ctx.reply('📝 Введи нову нотатку (або залиш порожньо):');
-    return ctx.wizard.next();
-  },
-  (ctx) => {
-    const note = ctx.message.text.trim();
-    const index = ctx.session.editingIndex;
-    const reminders = ctx.wizard.state.reminders;
 
-    const old = reminders[index];
-    const newReminder = {
-      date: ctx.wizard.state.newDate || old.date,
-      note: note || old.note
-    };
-
-    if (newReminder.date === old.date && newReminder.note === old.note) {
-      ctx.reply('ℹ️ Нічого не змінено.');
-    } else {
-      reminders[index] = newReminder;
-      saveReminders(ctx.from.id, reminders);
-      ctx.reply('✅ Нагадування оновлено!');
+  (ctx) => {
+    if (ctx.callbackQuery?.data === 'skip_date') {
+      ctx.session.skipDate = true;
+      ctx.answerCbQuery();
+      ctx.reply(
+        '📝 Введи нову нотатку (або залиш порожньо):',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('⏭ Пропустити', 'skip_note')],
+          [Markup.button.callback('❌ Скасувати', 'cancel_edit')]
+        ])
+      );
+      return ctx.wizard.next();
     }
 
+    if (ctx.callbackQuery?.data === 'cancel_edit') {
+      ctx.answerCbQuery();
+      ctx.reply('❌ Редагування скасовано.');
+      return ctx.scene.leave();
+    }
+
+    if (!ctx.message || !ctx.message.text || !/^\d{1,2}[./\-\s]\d{1,2}([./\-\s]\d{2,4})?$/.test(ctx.message.text.trim())) {
+      return ctx.reply('⚠️ Некоректна дата. Приклад: 25.07.1995');
+    }
+
+    ctx.session.newDate = ctx.message.text.trim();
+
+    ctx.reply(
+      '📝 Введи нову нотатку (або залиш порожньо):',
+      Markup.inlineKeyboard([
+        [Markup.button.callback('⏭ Пропустити', 'skip_note')],
+        [Markup.button.callback('❌ Скасувати', 'cancel_edit')]
+      ])
+    );
+    return ctx.wizard.next();
+  },
+
+  (ctx) => {
+    if (ctx.callbackQuery?.data === 'skip_note') {
+      ctx.session.skipNote = true;
+      ctx.answerCbQuery();
+    } else if (ctx.callbackQuery?.data === 'cancel_edit') {
+      ctx.answerCbQuery();
+      ctx.reply('❌ Редагування скасовано.');
+      return ctx.scene.leave();
+    } else if (ctx.message && ctx.message.text) {
+      ctx.session.newNote = ctx.message.text.trim();
+    }
+
+    const reminders = ctx.session.reminders;
+    const index = ctx.session.editingIndex;
+    let updated = false;
+
+    if (!ctx.session.skipDate && ctx.session.newDate) {
+      reminders[index].date = ctx.session.newDate;
+      updated = true;
+    }
+
+    if (!ctx.session.skipNote && typeof ctx.session.newNote === 'string') {
+      reminders[index].note = ctx.session.newNote;
+      updated = true;
+    }
+
+    saveUserReminders(ctx.from.id, reminders);
+
+    ctx.reply(updated ? '✅ Нагадування оновлено!' : 'ℹ️ Нічого не змінено.');
     return ctx.scene.leave();
   }
 );
 
-module.exports = editReminderScene;
+module.exports = editReminder;

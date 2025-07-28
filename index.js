@@ -5,28 +5,22 @@ const cron = require('node-cron');
 const express = require('express');
 const addReminderScene = require('./addReminderScene');
 const editReminderScene = require('./editReminderScene');
+const { loadUserReminders, saveUserReminders } = require('./userStorage');
+
+// 🔒 Перевірка на наявність токенів
+if (!process.env.BOT_TOKEN || !process.env.RENDER_EXTERNAL_URL) {
+  throw new Error('❌ BOT_TOKEN або RENDER_EXTERNAL_URL не задані у .env');
+}
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 const WEBHOOK_PATH = `/bot${process.env.BOT_TOKEN}`;
 const WEBHOOK_URL = `${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
 
-const dataDir = './userData';
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-
-const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
-const loadReminders = (userId) => {
-  const file = getUserFilePath(userId);
-  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : [];
-};
-const saveReminders = (userId, data) => {
-  fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
-};
-
-function calculateAge(dateStr) {
+const calculateAge = (dateStr) => {
   const [day, month, yearRaw] = dateStr.split(/[./\-\s]+/);
   let year = parseInt(yearRaw);
-  if (yearRaw.length === 2) {
+  if (yearRaw?.length === 2) {
     const currentYear = new Date().getFullYear() % 100;
     const century = year > currentYear ? 1900 : 2000;
     year += century;
@@ -37,7 +31,7 @@ function calculateAge(dateStr) {
   const m = today.getMonth() - birthDate.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
   return age;
-}
+};
 
 const messageTemplates = [
   `🎉 Сьогодні важлива дата!\n📅 {date} — виповнюється {age} років!\n{note}`,
@@ -51,10 +45,12 @@ const messageTemplates = [
   `📣 Алло, всім увага!\n{date} — день народження!\n🎁 {age} років — круто ж як!\n{note}`
 ];
 
+// Сцени
 const stage = new Scenes.Stage([addReminderScene, editReminderScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
+// Команди
 bot.start((ctx) => {
   ctx.reply(
     '👋 Привіт! Я тут, щоб підняти твій соц. рейтинг і вберегти від факапів з днями народження.\n\n➕ Додати нагадування\n📋 Список нагадувань',
@@ -65,7 +61,7 @@ bot.start((ctx) => {
 bot.hears('➕ Додати нагадування', (ctx) => ctx.scene.enter('addReminder'));
 
 bot.hears('📋 Список нагадувань', (ctx) => {
-  const reminders = loadReminders(ctx.from.id);
+  const reminders = loadUserReminders(ctx.from.id);
   if (!reminders.length) return ctx.reply('😶 У тебе ще нема жодного нагадування.');
 
   reminders.forEach((r, index) => {
@@ -82,30 +78,33 @@ bot.hears('📋 Список нагадувань', (ctx) => {
   });
 });
 
+// Зміна нагадування
 bot.action(/edit_(\d+)/, (ctx) => {
   ctx.session.editingIndex = Number(ctx.match[1]);
   ctx.answerCbQuery();
   ctx.scene.enter('editReminder');
 });
 
+// Видалення нагадування
 bot.action(/delete_(\d+)/, (ctx) => {
   const index = Number(ctx.match[1]);
-  const reminders = loadReminders(ctx.from.id);
+  const reminders = loadUserReminders(ctx.from.id);
   if (!reminders[index]) return ctx.answerCbQuery('⚠️ Нагадування не знайдено');
   reminders.splice(index, 1);
-  saveReminders(ctx.from.id, reminders);
+  saveUserReminders(ctx.from.id, reminders);
   ctx.answerCbQuery('🗑 Видалено!');
   ctx.editMessageText('🗑 Нагадування видалено');
 });
 
+// CRON: перевірка щохвилини
 cron.schedule('* * * * *', () => {
   const today = new Date();
   const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  const users = fs.readdirSync(dataDir).filter((file) => file.endsWith('.json'));
+  const users = fs.readdirSync(path.join(__dirname, 'data')).filter((file) => file.endsWith('.json'));
 
   users.forEach((userFile) => {
     const userId = userFile.replace('.json', '');
-    const reminders = loadReminders(userId);
+    const reminders = loadUserReminders(userId);
     reminders.forEach((r) => {
       if (!r.date) return;
       const [day, month] = r.date.split(/[./\-\s]+/);
@@ -125,8 +124,10 @@ cron.schedule('* * * * *', () => {
   });
 });
 
+// Webhook setup для RENDER
 bot.telegram.setWebhook(WEBHOOK_URL);
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
+// Старт сервера
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
