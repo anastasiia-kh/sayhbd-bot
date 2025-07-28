@@ -58,6 +58,8 @@ editReminder.enter(async (ctx) => {
 });
 
 editReminder.on('text', async (ctx) => {
+  console.log('STEP:', ctx.scene.state.editStep, 'TEXT:', ctx.message.text);
+
   const step = ctx.scene.state.editStep;
   const text = ctx.message.text;
 
