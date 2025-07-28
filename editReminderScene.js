@@ -68,9 +68,8 @@ editReminder.on('text', async (ctx) => {
     return handleCancel(ctx, step);
   }
 
-  switch (step) {
-  case 'menu':
-  case 'afterEdit':  // додаємо обробку тут теж
+  // Логіка після редагування (afterEdit) або в меню (menu)
+  if (step === 'menu' || step === 'afterEdit') {
     if (text === '🗓 Змінити дату') {
       ctx.scene.state.editStep = 'editDate';
       await ctx.reply(
@@ -103,69 +102,47 @@ editReminder.on('text', async (ctx) => {
     }
     await ctx.reply('⚠️ Обери дію з меню.');
     return;
+  }
 
-    case 'editDate':
-      {
-        const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
-        if (!dateRegex.test(text)) {
-          await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
-          return;
-        }
-
-        const [day, month, yearPart] = text.split(/[./\-\s]/);
-        let yearNum = Number(yearPart);
-        const currentYear = new Date().getFullYear() % 100;
-        const century = yearNum > currentYear ? 1900 : 2000;
-        if (yearPart.length === 2) yearNum += century;
-
-        ctx.scene.state.reminder.date = text;
-        ctx.scene.state.editStep = 'afterEdit';
-        ctx.scene.state.reminder.dateEdited = true;
-
-        await ctx.reply(
-          `Дата змінена на: ${text}`,
-          Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
-        );
+  switch (step) {
+    case 'editDate': {
+      const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
+      if (!dateRegex.test(text)) {
+        await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
         return;
       }
+      const [day, month, yearPart] = text.split(/[./\-\s]/);
+      let yearNum = Number(yearPart);
+      const currentYear = new Date().getFullYear() % 100;
+      const century = yearNum > currentYear ? 1900 : 2000;
+      if (yearPart.length === 2) yearNum += century;
 
-    case 'editNote':
-      {
-        ctx.scene.state.reminder.note = text || '';
-        ctx.scene.state.editStep = 'afterEdit';
-        ctx.scene.state.reminder.noteEdited = true;
+      ctx.scene.state.reminder.date = text;
+      ctx.scene.state.editStep = 'afterEdit';
+      ctx.scene.state.reminder.dateEdited = true;
 
-        await ctx.reply(
-          `Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`,
-          Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
-        );
-        return;
-      }
+      await ctx.reply(
+        `Дата змінена на: ${text}`,
+        Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+      );
+      return;
+    }
+
+    case 'editNote': {
+      ctx.scene.state.reminder.note = text || '';
+      ctx.scene.state.editStep = 'afterEdit';
+      ctx.scene.state.reminder.noteEdited = true;
+
+      await ctx.reply(
+        `Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`,
+        Markup.keyboard(['↩️ Повернутись в меню редагування', '🏠 Головне меню']).resize()
+      );
+      return;
+    }
 
     case 'editRemindBefore':
       // Якщо отримали текст замість callback — підказка
       await ctx.reply('⚠️ Для вибору часу сповіщень використовуй кнопки.');
-      return;
-
-    case 'afterEdit':
-      if (text === '↩️ Повернутись в меню редагування') {
-        ctx.scene.state.editStep = 'menu';
-        await showMainMenu(ctx);
-        return;
-      }
-      if (text === '🏠 Головне меню') {
-        await ctx.reply(
-          'Продовжимо роботу? Обери будь-яку дію зі списку нижче.',
-          Markup.keyboard([
-            ['➕ Додати нагадування'],
-            ['📋 Список нагадувань'],
-            ['ℹ️ Допомога']
-          ]).resize()
-        );
-        ctx.scene.state.editStep = null;
-        return;
-      }
-      await ctx.reply('⚠️ Використовуй кнопки меню.');
       return;
 
     default:
