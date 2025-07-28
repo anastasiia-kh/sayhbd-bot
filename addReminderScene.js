@@ -1,37 +1,6 @@
 const { Scenes, Markup } = require('telegraf');
 const { v4: uuidv4 } = require('uuid');
-const fs = require('fs');
-const path = require('path');
-
-const dataDir = path.join(__dirname, 'data'); // Абсолютний шлях до папки data
-
-// Переконаємось, що папка data існує
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
-
-function loadUserReminders(userId) {
-  try {
-    const filePath = getUserFilePath(userId);
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error('Error reading reminders for user', userId, e);
-  }
-  return [];
-}
-
-function saveUserReminders(userId, data) {
-  try {
-    fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error('Error saving reminders for user', userId, e);
-  }
-}
+const { loadUserReminders, saveUserReminders } = require('./userStorage');  // Імпорт правильних функцій
 
 const reminderOptions = [
   { label: 'У день події', value: 0 },
@@ -49,13 +18,11 @@ const mainMenuKeyboard = Markup.keyboard([
 const addReminder = new Scenes.WizardScene(
   'addReminder',
 
-  // Крок 0 - Запитати дату
   async (ctx) => {
     await ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95', Markup.removeKeyboard());
     return ctx.wizard.next();
   },
 
-  // Крок 1 - Обробка введеної дати
   async (ctx) => {
     if (!ctx.message || !ctx.message.text) {
       return ctx.reply('⚠️ Надішли, будь ласка, дату текстом.');
@@ -99,7 +66,6 @@ const addReminder = new Scenes.WizardScene(
     return ctx.wizard.next();
   },
 
-  // Крок 2 - Обробка нотатки або пропуску
   async (ctx) => {
     if (ctx.callbackQuery?.data === 'skip_note') {
       ctx.wizard.state.note = '';
@@ -128,7 +94,6 @@ const addReminder = new Scenes.WizardScene(
     return ctx.wizard.next();
   },
 
-  // Крок 3 - Обробка вибору remindBefore та збереження
   async (ctx) => {
     const data = ctx.callbackQuery?.data;
     const state = ctx.wizard.state;

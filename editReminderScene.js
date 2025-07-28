@@ -1,34 +1,5 @@
 const { Scenes, Markup } = require('telegraf');
-const fs = require('fs');
-const path = require('path');
-
-const dataDir = path.join(__dirname, 'data'); // Абсолютний шлях до папки data
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
-
-function loadUserReminders(userId) {
-  try {
-    const filePath = getUserFilePath(userId);
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error('Error reading reminders for user', userId, e);
-  }
-  return [];
-}
-
-function saveUserReminders(userId, data) {
-  try {
-    fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error('Error saving reminders for user', userId, e);
-  }
-}
+const { loadUserReminders, saveUserReminders } = require('./userStorage');
 
 const reminderOptions = [
   { label: 'У день події', value: 0 },
@@ -51,8 +22,8 @@ editReminder.enter(async (ctx) => {
 
   ctx.scene.state.reminder = { ...reminder };
   ctx.scene.state.selectedRemindBefore = new Set(reminder.remindBefore || []);
-  ctx.scene.state.editStep = 'menu'; // початковий крок меню
-  ctx.scene.state.remindersList = reminders; // збережемо весь список для збереження
+  ctx.scene.state.editStep = 'menu';
+  ctx.scene.state.remindersList = reminders;
 
   await showMainMenu(ctx);
 });
@@ -101,13 +72,13 @@ editReminder.on('text', async (ctx) => {
       ctx.scene.state.editStep = 'menu';
       await ctx.reply('Редагування дати скасовано.');
       await showMainMenu(ctx);
-      return; // <-- важливо!
+      return;
     }
 
     const dateRegex = /^\d{1,2}[./\-\s]\d{1,2}[./\-\s]\d{2,4}$/;
     if (!dateRegex.test(text)) {
       await ctx.reply('❌ Невірна дата. Спробуй ще раз або /cancel.');
-      return; // <-- важливо!
+      return;
     }
 
     const [day, month, yearPart] = text.split(/[./\-\s]/);
@@ -132,7 +103,7 @@ editReminder.on('text', async (ctx) => {
       ctx.scene.state.editStep = 'menu';
       await ctx.reply('Редагування нотатки скасовано.');
       await showMainMenu(ctx);
-      return; // <-- важливо!
+      return;
     }
 
     ctx.scene.state.reminder.note = text || '';
@@ -153,8 +124,6 @@ editReminder.on('text', async (ctx) => {
       return;
     } else if (text === '🏠 Головне меню') {
       await saveChanges(ctx);
-
-      // Після збереження показати меню замість видалення клавіатури
       ctx.scene.state.editStep = 'menu';
       await showMainMenu(ctx);
       return;
