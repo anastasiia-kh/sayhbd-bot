@@ -3,16 +3,35 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = './data'; // Папка з даними
+const dataDir = path.join(__dirname, 'data'); // Абсолютний шлях до папки data
+
+// Переконаємось, що папка data існує
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
 const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
 
-const loadUserReminders = (userId) =>
-  fs.existsSync(getUserFilePath(userId))
-    ? JSON.parse(fs.readFileSync(getUserFilePath(userId)))
-    : [];
+function loadUserReminders(userId) {
+  try {
+    const filePath = getUserFilePath(userId);
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Error reading reminders for user', userId, e);
+  }
+  return [];
+}
 
-const saveUserReminders = (userId, data) =>
-  fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
+function saveUserReminders(userId, data) {
+  try {
+    fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('Error saving reminders for user', userId, e);
+  }
+}
 
 const reminderOptions = [
   { label: 'У день події', value: 0 },
@@ -30,7 +49,7 @@ const mainMenuKeyboard = Markup.keyboard([
 const addReminder = new Scenes.WizardScene(
   'addReminder',
 
-  // Крок 0 - Ввести дату
+  // Крок 0 - Запитати дату
   async (ctx) => {
     await ctx.reply('Введи дату у форматі: 25.07.1996 або 1/1/95', Markup.removeKeyboard());
     return ctx.wizard.next();
@@ -134,31 +153,30 @@ const addReminder = new Scenes.WizardScene(
     }
 
     if (data === 'done') {
-  if (!state.remindBefore.length) {
-    return ctx.answerCbQuery('⚠️ Обери хоча б один варіант!');
-  }
+      if (!state.remindBefore.length) {
+        return ctx.answerCbQuery('⚠️ Обери хоча б один варіант!');
+      }
 
-  const reminders = loadUserReminders(ctx.from.id);
+      const reminders = loadUserReminders(ctx.from.id);
 
-  const newReminder = {
-    id: uuidv4(),
-    date: state.date,
-    note: state.note || '',
-    remindBefore: [...state.remindBefore].sort((a,b) => a-b)
-  };
+      const newReminder = {
+        id: uuidv4(),
+        date: state.date,
+        note: state.note || '',
+        remindBefore: [...state.remindBefore].sort((a,b) => a-b)
+      };
 
-  reminders.push(newReminder);
-  console.log('Reminders перед збереженням (addReminder):', reminders);
-  saveUserReminders(ctx.from.id, reminders);
+      reminders.push(newReminder);
+      console.log('Reminders перед збереженням (addReminder):', reminders);
+      saveUserReminders(ctx.from.id, reminders);
 
-  console.log('Додано нове нагадування:', newReminder);
+      console.log('Додано нове нагадування:', newReminder);
 
-  ctx.wizard.state = {}; // очищаємо стан
+      ctx.wizard.state = {}; // очищаємо стан
 
-  await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
-  return ctx.scene.leave();
-}
-
+      await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
+      return ctx.scene.leave();
+    }
   }
 );
 
