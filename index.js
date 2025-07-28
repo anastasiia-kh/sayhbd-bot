@@ -126,13 +126,14 @@ bot.on('callback_query', async (ctx) => {
     const id = data.split('_')[1];
     const reminderIndex = reminders.findIndex(r => r.id === id);
 
-    if (reminderIndex !== -1) {
-      ctx.scene.state = {
-        editIndex: reminderIndex,
-        allReminders: reminders
-      };
-      return ctx.scene.enter('editReminder');
-    } else {
+   if (reminderIndex !== -1) {
+  ctx.scene.state = {
+    editId: id,            // передаємо id нагадування, а не індекс
+    allReminders: reminders
+  };
+  return ctx.scene.enter('editReminder');
+}
+ else {
       return ctx.reply('⚠️ Це нагадування вже не існує.');
     }
   }

@@ -18,8 +18,8 @@ const editReminder = new Scenes.BaseScene('editReminder');
 editReminder.enter((ctx) => {
   const userId = ctx.from.id;
   const reminders = ctx.scene.state.allReminders || loadReminders(userId);
-  const editIndex = ctx.scene.state.editIndex;
-  const reminder = reminders[editIndex];
+  const editId = ctx.scene.state.editId;  // Замість індексу тут зберігаємо id нагадування
+  const reminder = reminders.find(r => r.id === editId);
 
   if (!reminder) {
     ctx.reply('⚠️ Не вдалося знайти нагадування.');
@@ -76,15 +76,16 @@ editReminder.on('callback_query', async (ctx) => {
 
   if (data === 'save_edit') {
     const userId = ctx.from.id;
-    const editIndex = ctx.scene.state.editIndex;
+    const editId = ctx.scene.state.editId;
     const reminders = loadReminders(userId);
+    const reminderIndex = reminders.findIndex(r => r.id === editId);
 
-    if (!reminders[editIndex]) {
+    if (reminderIndex === -1) {
       await ctx.reply('⚠️ Нагадування вже не існує.');
       return ctx.scene.leave();
     }
 
-    reminders[editIndex].remindBefore = [...ctx.scene.state.selected].sort((a, b) => a - b);
+    reminders[reminderIndex].remindBefore = [...ctx.scene.state.selected].sort((a, b) => a - b);
     saveReminders(userId, reminders);
 
     const successMessages = [
