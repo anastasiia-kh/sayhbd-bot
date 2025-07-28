@@ -124,10 +124,8 @@ const addReminder = new Scenes.WizardScene(
         return ctx.answerCbQuery('⚠️ Обери хоча б один варіант!');
       }
 
-      // Завантажуємо поточні нагадування
       const reminders = loadUserReminders(ctx.from.id);
 
-      // Додаємо нове з унікальним id
       reminders.push({
         id: uuidv4(),
         date: state.date,
@@ -135,8 +133,9 @@ const addReminder = new Scenes.WizardScene(
         remindBefore: state.remindBefore.sort((a, b) => a - b)
       });
 
-      // Зберігаємо оновлений список
       saveUserReminders(ctx.from.id, reminders);
+
+      console.log('Додано нове нагадування:', reminders[reminders.length - 1]); // лог
 
       await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
       return ctx.scene.leave();

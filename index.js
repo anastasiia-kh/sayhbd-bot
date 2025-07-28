@@ -153,7 +153,29 @@ cron.schedule('* * * * *', () => {
 
   users.forEach((userFile) => {
     const userId = userFile.replace('.json', '');
-    const reminders = loadUserReminders(userId);
+const reminders = ensureRemindersHaveIds(userId);
+
+const { v4: uuidv4 } = require('uuid');
+const { loadUserReminders, saveUserReminders } = require('./userStorage');
+
+function ensureRemindersHaveIds(userId) {
+  const reminders = loadUserReminders(userId);
+  let updated = false;
+
+  reminders.forEach((r) => {
+    if (!r.id) {
+      r.id = uuidv4();
+      updated = true;
+    }
+  });
+
+  if (updated) {
+    saveUserReminders(userId, reminders);
+  }
+
+  return reminders;
+}
+
 
     reminders.forEach((r) => {
       if (!r.date || !Array.isArray(r.remindBefore)) return;

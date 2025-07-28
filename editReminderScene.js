@@ -4,21 +4,22 @@ const path = require('path');
 
 const dataDir = './userData';
 const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
+
 const loadReminders = (userId) =>
   fs.existsSync(getUserFilePath(userId))
     ? JSON.parse(fs.readFileSync(getUserFilePath(userId)))
     : [];
+
 const saveReminders = (userId, data) =>
   fs.writeFileSync(getUserFilePath(userId), JSON.stringify(data, null, 2));
 
 const editReminder = new Scenes.BaseScene('editReminder');
 
-// Вхід у сцену редагування
 editReminder.enter((ctx) => {
   const userId = ctx.from.id;
   const reminders = ctx.scene.state.allReminders || loadReminders(userId);
-  const index = ctx.scene.state.editIndex;
-  const reminder = reminders[index];
+  const editIndex = ctx.scene.state.editIndex;
+  const reminder = reminders[editIndex];
 
   if (!reminder) {
     ctx.reply('⚠️ Не вдалося знайти нагадування.');
@@ -43,7 +44,6 @@ editReminder.enter((ctx) => {
   );
 });
 
-// Обробка натискань кнопок
 editReminder.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
 
@@ -57,8 +57,7 @@ editReminder.on('callback_query', async (ctx) => {
       selected.add(day);
     }
 
-    // Оновлення кнопок
-    ctx.editMessageReplyMarkup({
+    await ctx.editMessageReplyMarkup({
       inline_keyboard: [
         [0, 1, 3, 7].map((d) => ({
           text: selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`,
@@ -70,14 +69,22 @@ editReminder.on('callback_query', async (ctx) => {
         ]
       ]
     });
+
+    await ctx.answerCbQuery();
     return;
   }
 
   if (data === 'save_edit') {
     const userId = ctx.from.id;
-    const index = ctx.scene.state.editIndex;
+    const editIndex = ctx.scene.state.editIndex;
     const reminders = loadReminders(userId);
-    reminders[index].remindBefore = [...ctx.scene.state.selected].sort((a, b) => a - b);
+
+    if (!reminders[editIndex]) {
+      await ctx.reply('⚠️ Нагадування вже не існує.');
+      return ctx.scene.leave();
+    }
+
+    reminders[editIndex].remindBefore = [...ctx.scene.state.selected].sort((a, b) => a - b);
     saveReminders(userId, reminders);
 
     const successMessages = [
@@ -87,12 +94,18 @@ editReminder.on('callback_query', async (ctx) => {
       '✨ Вау! Це нагадування виглядає краще, ніж мої алгоритми!',
       '🥳 Готово! Дата зафіксована. Залишилось лише святкувати!'
     ];
-    ctx.reply(successMessages[Math.floor(Math.random() * successMessages.length)]);
+
+    await ctx.reply(successMessages[Math.floor(Math.random() * successMessages.length)], {
+      reply_markup: {
+        remove_keyboard: true
+      }
+    });
+
     return ctx.scene.leave();
   }
 
   if (data === 'cancel_edit') {
-    ctx.reply('❌ Редагування скасовано.');
+    await ctx.reply('❌ Редагування скасовано.');
     return ctx.scene.leave();
   }
 });
