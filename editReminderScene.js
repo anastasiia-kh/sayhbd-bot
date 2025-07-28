@@ -2,7 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = './data'; // Шлях до твоєї папки з даними
+const dataDir = './data'; // Твоя папка з даними
 const getUserFilePath = (userId) => path.join(dataDir, `${userId}.json`);
 
 const loadReminders = (userId) =>
@@ -55,7 +55,10 @@ const editReminder = new Scenes.WizardScene(
     // Встановлюємо поточний режим редагування і переходимо на відповідний крок
     if (text === '🗓 Змінити дату') {
       ctx.scene.state.editing = 'date';
-      await ctx.reply('Введи нову дату у форматі: 25.07.1996 або 1/1/95 або /cancel для скасування', Markup.removeKeyboard());
+      await ctx.reply(
+        'Введи нову дату у форматі: 25.07.1996 або 1/1/95 або /cancel для скасування',
+        Markup.removeKeyboard()
+      );
       return ctx.wizard.next();
     }
 
@@ -180,24 +183,17 @@ async function showEditMenu(ctx) {
   buttons.push('💾 Зберегти й вийти');
   buttons.push('❌ Скасувати');
 
-  if (ctx.callbackQuery) {
+  const text = `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nЩо хочеш змінити?`;
+
+  if (ctx.updateType === 'callback_query' || ctx.callbackQuery) {
     try {
-      await ctx.editMessageText(
-        `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nЩо хочеш змінити?`,
-        Markup.keyboard(buttons).resize()
-      );
-    } catch (e) {
-      // Якщо редагувати не можна, відправляємо нове повідомлення
-      await ctx.reply(
-        `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nЩо хочеш змінити?`,
-        Markup.keyboard(buttons).resize()
-      );
+      await ctx.editMessageText(text, Markup.keyboard(buttons).resize());
+    } catch {
+      // Якщо редагувати не вдається, надсилаємо нове повідомлення
+      await ctx.reply(text, Markup.keyboard(buttons).resize());
     }
   } else {
-    await ctx.reply(
-      `Редагуємо нагадування:\n📅 ${reminder.date}${reminder.note ? ` — ${reminder.note}` : ''}\n\nЩо хочеш змінити?`,
-      Markup.keyboard(buttons).resize()
-    );
+    await ctx.reply(text, Markup.keyboard(buttons).resize());
   }
 }
 
@@ -216,7 +212,7 @@ async function showRemindBeforeButtons(ctx) {
           ]
         ])
       );
-    } catch (e) {
+    } catch {
       await ctx.reply(
         `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
         Markup.inlineKeyboard([
