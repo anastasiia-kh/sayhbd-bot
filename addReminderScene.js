@@ -1,7 +1,6 @@
 const { Scenes, Markup } = require('telegraf');
+const { v4: uuidv4 } = require('uuid');  // для генерації id
 const { loadUserReminders, saveUserReminders } = require('./userStorage');
-
-const { v4: uuidv4 } = require('uuid');
 // ...
 
 // При додаванні нового нагадування:
@@ -136,12 +135,15 @@ return ctx.wizard.next();
       }
 
       const reminders = loadUserReminders(ctx.from.id);
-      reminders.push({
-        date: state.date,
-        note: state.note,
-        remindBefore: state.remindBefore.sort((a, b) => a - b)
-      });
-      saveUserReminders(ctx.from.id, reminders);
+
+reminders.push({
+  id: uuidv4(),
+  date: ctx.wizard.state.date,
+  note: ctx.wizard.state.note,
+  remindBefore: ctx.wizard.state.remindBefore.sort((a, b) => a - b)
+});
+
+saveUserReminders(ctx.from.id, reminders);
 
       await ctx.reply('✅ Нагадування збережено!', mainMenuKeyboard);
       return ctx.scene.leave();
