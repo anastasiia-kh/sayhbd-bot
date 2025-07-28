@@ -16,7 +16,7 @@ const saveReminders = (userId, data) =>
 const editReminder = new Scenes.WizardScene(
   'editReminder',
 
-  // Крок 0 - меню редагування, без кнопки "Зберегти й вийти"
+  // Крок 0 - меню редагування (без кнопки "Зберегти й вийти")
   async (ctx) => {
     const reminders = ctx.scene.state.allReminders || loadReminders(ctx.from.id);
     const editId = ctx.scene.state.editId;
@@ -114,6 +114,7 @@ const editReminder = new Scenes.WizardScene(
       }
 
       ctx.scene.state.reminder.date = rawDate;
+      ctx.scene.state.reminder.dateEdited = true; // прапорець для UI
       ctx.scene.state.editing = null;
       await ctx.reply(`Дата змінена на: ${rawDate}`);
       await showEditMenu(ctx);
@@ -123,6 +124,7 @@ const editReminder = new Scenes.WizardScene(
     if (ctx.scene.state.editing === 'note') {
       const note = text?.trim();
       ctx.scene.state.reminder.note = note || '';
+      ctx.scene.state.reminder.noteEdited = true; // прапорець для UI
       ctx.scene.state.editing = null;
       await ctx.reply(`Нотатку змінено на: ${ctx.scene.state.reminder.note || '(порожня)'}`);
       await showEditMenu(ctx);
@@ -159,6 +161,7 @@ const editReminder = new Scenes.WizardScene(
 
     if (data === 'save_edit') {
       ctx.scene.state.reminder.remindBefore = Array.from(ctx.scene.state.selectedRemindBefore).sort((a,b) => a-b);
+      ctx.scene.state.reminder.remindBeforeEdited = true; // прапорець для UI
       ctx.scene.state.editing = null;
       await ctx.reply('🔖 Нагадування оновлено.');
       await showEditMenu(ctx);
@@ -191,17 +194,8 @@ const editReminder = new Scenes.WizardScene(
   }
 );
 
-// Оновлена функція показу меню з видаленням попередніх повідомлень
+// Функція для відображення меню редагування з позначками ✔️
 async function showEditMenu(ctx) {
-  // Видаляємо попереднє меню, якщо це callbackQuery
-  if (ctx.callbackQuery) {
-    try {
-      await ctx.deleteMessage();
-    } catch (e) {
-      // Помилку ігноруємо (наприклад, повідомлення вже видалене)
-    }
-  }
-
   const editing = ctx.scene.state.editing;
   const reminder = ctx.scene.state.reminder;
 
@@ -220,25 +214,22 @@ async function showEditMenu(ctx) {
   );
 }
 
+// Функція для показу кнопок remindBefore
 async function showRemindBeforeButtons(ctx) {
   const selected = ctx.scene.state.selectedRemindBefore;
 
   if (ctx.callbackQuery) {
-    try {
-      await ctx.editMessageText(
-        `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
-        Markup.inlineKeyboard([
-          [0,1,3,7].map(d => Markup.button.callback(selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)),
-          [
-            Markup.button.callback('❎ Пропустити', 'skip_remind'),
-            Markup.button.callback('💾 Зберегти', 'save_edit'),
-            Markup.button.callback('❌ Скасувати', 'cancel_edit')
-          ]
-        ])
-      );
-    } catch (e) {
-      // Якщо редагування повідомлення не вдалося — ігноруємо
-    }
+    await ctx.editMessageText(
+      `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
+      Markup.inlineKeyboard([
+        [0,1,3,7].map(d => Markup.button.callback(selected.has(d) ? `✅ ${d} дн.` : `${d} дн.`, `toggle_${d}`)),
+        [
+          Markup.button.callback('❎ Пропустити', 'skip_remind'),
+          Markup.button.callback('💾 Зберегти', 'save_edit'),
+          Markup.button.callback('❌ Скасувати', 'cancel_edit')
+        ]
+      ])
+    );
   } else {
     await ctx.reply(
       `Оберіть, коли нагадати:\n(натискай щоб додати/видалити)`,
@@ -254,6 +245,7 @@ async function showRemindBeforeButtons(ctx) {
   }
 }
 
+// Функція для підтвердження збереження змін
 async function askSaveConfirm(ctx) {
   await ctx.reply(
     'Впевнений, що хочеш зберегти всі зміни?',
@@ -264,6 +256,7 @@ async function askSaveConfirm(ctx) {
   );
 }
 
+// Функція для збереження змін
 async function saveChanges(ctx) {
   const userId = ctx.from.id;
   const reminders = loadReminders(userId);
@@ -274,7 +267,13 @@ async function saveChanges(ctx) {
     return;
   }
 
-  reminders[reminderIndex] = ctx.scene.state.reminder;
+  // Перед збереженням прибираємо прапорці UI
+  const toSaveReminder = {...ctx.scene.state.reminder};
+  delete toSaveReminder.dateEdited;
+  delete toSaveReminder.noteEdited;
+  delete toSaveReminder.remindBeforeEdited;
+
+  reminders[reminderIndex] = toSaveReminder;
   saveReminders(userId, reminders);
 
   await ctx.reply('✅ Всі зміни збережено.', Markup.removeKeyboard());
