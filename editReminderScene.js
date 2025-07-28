@@ -1,6 +1,12 @@
 const { Scenes, Markup } = require('telegraf');
 const { loadUserReminders, saveUserReminders } = require('./userStorage');
 
+const mainMenuKeyboard = Markup.keyboard([
+  ['➕ Додати нагадування'],
+  ['📋 Список нагадувань'],
+  ['ℹ️ Допомога']
+]).resize();
+
 const editReminder = new Scenes.WizardScene(
   'editReminder',
 
@@ -9,7 +15,7 @@ const editReminder = new Scenes.WizardScene(
     const index = ctx.session.editingIndex;
 
     if (!reminders[index]) {
-      ctx.reply('⚠️ Нагадування не знайдено.');
+      ctx.reply('⚠️ Нагадування не знайдено.', mainMenuKeyboard);
       return ctx.scene.leave();
     }
 
@@ -17,11 +23,13 @@ const editReminder = new Scenes.WizardScene(
 
     ctx.reply(
       '✏️ Введи нову дату (наприклад, 25.07.1995):',
-      Markup.inlineKeyboard([
-        [Markup.button.callback('⏭ Пропустити', 'skip_date')],
-        [Markup.button.callback('❌ Скасувати', 'cancel_edit')]
-      ])
+      {
+        reply_markup: {
+          remove_keyboard: true
+        }
+      }
     );
+
     return ctx.wizard.next();
   },
 
@@ -41,7 +49,7 @@ const editReminder = new Scenes.WizardScene(
 
     if (ctx.callbackQuery?.data === 'cancel_edit') {
       ctx.answerCbQuery();
-      ctx.reply('❌ Редагування скасовано.');
+      ctx.reply('❌ Редагування скасовано.', mainMenuKeyboard);
       return ctx.scene.leave();
     }
 
@@ -67,7 +75,7 @@ const editReminder = new Scenes.WizardScene(
       ctx.answerCbQuery();
     } else if (ctx.callbackQuery?.data === 'cancel_edit') {
       ctx.answerCbQuery();
-      ctx.reply('❌ Редагування скасовано.');
+      ctx.reply('❌ Редагування скасовано.', mainMenuKeyboard);
       return ctx.scene.leave();
     } else if (ctx.message && ctx.message.text) {
       ctx.session.newNote = ctx.message.text.trim();
@@ -89,7 +97,11 @@ const editReminder = new Scenes.WizardScene(
 
     saveUserReminders(ctx.from.id, reminders);
 
-    ctx.reply(updated ? '✅ Нагадування оновлено!' : 'ℹ️ Нічого не змінено.');
+    ctx.reply(
+      updated ? '✅ Нагадування оновлено!' : 'ℹ️ Нічого не змінено.',
+      mainMenuKeyboard
+    );
+
     return ctx.scene.leave();
   }
 );
